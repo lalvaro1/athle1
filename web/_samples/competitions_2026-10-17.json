@@ -1,0 +1,17 @@
+{
+  "fetchedAt": "2026-10-17T15:17:58.198Z",
+  "date": "2026-10-17",
+  "clubQuery": "Ca Beglais",
+  "youthCategories": [
+    "U14",
+    "U16"
+  ],
+  "calendarCompetitions": 111,
+  "withResultsBeforeYouthFilter": 0,
+  "checkedWithResults": 0,
+  "count": 0,
+  "competitions": [],
+  "driveFiles": {
+    "competitionsList": "competitions_2026-10-17.json"
+  }
+}

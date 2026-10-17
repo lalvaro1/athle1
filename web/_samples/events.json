@@ -1,0 +1,548 @@
+{
+  "fetchedAt": "2026-10-17T15:27:57.133Z",
+  "competitionId": "319050",
+  "title": "13/06/26 - Championnats de Gironde Epreuves Individuelles U14 — TALENCE - N-A - 033",
+  "club": {
+    "id": "033011",
+    "name": "Ca Beglais"
+  },
+  "sourceUrl": "https://www.athle.fr/bases/liste.aspx?frmbase=resultats&frmmode=1&frmespace=0&frmcompetition=319050&frmclub=033011",
+  "count": 17,
+  "participantRows": 24,
+  "epreuves": [
+    {
+      "id": "1 000m / BEF",
+      "name": "1 000m / BEF",
+      "horaire": "15:03",
+      "seriesSchedule": {
+        "finale 1- 2013": "15:03",
+        "1- 2013": "15:03",
+        "finale- 1- 2013": "15:03",
+        "finale 2- 2014": "15:12",
+        "2- 2014": "15:12",
+        "finale- 2- 2014": "15:12"
+      },
+      "participants": [
+        {
+          "athleteId": "3454796",
+          "athleteName": "CHOPINET Isaure",
+          "epreuveName": "1 000m / BEF",
+          "performance": "NP",
+          "series": "Finale 1- 2013",
+          "dossard": "0",
+          "category": "BEF/13",
+          "date": "13/06",
+          "horaire": "15:03"
+        },
+        {
+          "athleteId": "3157898",
+          "athleteName": "DE CHALAIN Elise",
+          "epreuveName": "1 000m / BEF",
+          "performance": "1. 3'26''28",
+          "series": "Finale 1- 2013",
+          "dossard": "38",
+          "category": "BEF/13",
+          "date": "13/06",
+          "horaire": "15:03"
+        }
+      ]
+    },
+    {
+      "id": "1 000m / BEM",
+      "name": "1 000m / BEM",
+      "horaire": "15:31",
+      "seriesSchedule": {
+        "finale 1- 2013": "15:22",
+        "1- 2013": "15:22",
+        "finale- 1- 2013": "15:22",
+        "finale 2- 2013": "15:31",
+        "2- 2013": "15:31",
+        "finale- 2- 2013": "15:31",
+        "finale 3- 2014": "15:38",
+        "3- 2014": "15:38",
+        "finale- 3- 2014": "15:38"
+      },
+      "participants": [
+        {
+          "athleteId": "3121316",
+          "athleteName": "GOUPIL LANDAIS Vadim",
+          "epreuveName": "1 000m / BEM",
+          "performance": "3. 3'26''37",
+          "series": "Finale 2- 2013",
+          "dossard": "32",
+          "category": "BEM/13",
+          "date": "13/06",
+          "horaire": "15:31"
+        },
+        {
+          "athleteId": "3121240",
+          "athleteName": "MONIER Lucas",
+          "epreuveName": "1 000m / BEM",
+          "performance": "1. 3'19''77",
+          "series": "Finale 2- 2013",
+          "dossard": "35",
+          "category": "BEM/13",
+          "date": "13/06",
+          "horaire": "15:31"
+        },
+        {
+          "athleteId": "3498787",
+          "athleteName": "RONTEIX Jules",
+          "epreuveName": "1 000m / BEM",
+          "performance": "8. 3'59''84",
+          "series": "Finale 2- 2013",
+          "dossard": "13",
+          "category": "BEM/13",
+          "date": "13/06",
+          "horaire": "15:31"
+        }
+      ]
+    },
+    {
+      "id": "2 000m Marche / BEM",
+      "name": "2 000m Marche / BEM",
+      "horaire": "14:17",
+      "seriesSchedule": {
+        "finale": "14:17"
+      },
+      "participants": [
+        {
+          "athleteId": "2506216",
+          "athleteName": "ALVARO SAUBAIGNE Oscar",
+          "epreuveName": "2 000m Marche / BEM",
+          "performance": "3. 12'45''79",
+          "series": "Finale",
+          "dossard": "33",
+          "category": "BEM/13",
+          "date": "13/06",
+          "horaire": "14:17"
+        }
+      ]
+    },
+    {
+      "id": "50m / BEM",
+      "name": "50m / BEM",
+      "horaire": "12:40",
+      "seriesSchedule": {
+        "2013": "13:15",
+        "2014": "13:12",
+        "finale 2014": "13:12",
+        "finale- 2014": "13:12",
+        "finale 2013": "13:15",
+        "finale- 2013": "13:15",
+        "serie 1": "12:35",
+        "serie 2": "12:37",
+        "serie 3": "12:40",
+        "serie 4": "12:42",
+        "serie 5": "12:45"
+      },
+      "participants": [
+        {
+          "athleteId": "3526060",
+          "athleteName": "PALY-PORQUET Samuel",
+          "epreuveName": "50m / BEM",
+          "performance": "2. 7''20 (-1.6) q",
+          "series": "Série 3",
+          "dossard": "37",
+          "category": "BEM/13",
+          "date": "13/06",
+          "horaire": "12:40"
+        }
+      ]
+    },
+    {
+      "id": "50m Haies (65) / BEF",
+      "name": "50m Haies (65) / BEF",
+      "horaire": "9:58",
+      "seriesSchedule": {
+        "1": "9:58",
+        "2": "10:04",
+        "finale 1": "9:58",
+        "finale- 1": "9:58",
+        "finale 2": "10:04",
+        "finale- 2": "10:04"
+      },
+      "participants": [
+        {
+          "athleteId": "3503600",
+          "athleteName": "ANNEZO Louise",
+          "epreuveName": "50m Haies (65) / BEF",
+          "performance": "7. 9''78 (+0.9)",
+          "series": "Finale 1",
+          "dossard": "31",
+          "category": "BEF/14",
+          "date": "13/06",
+          "horaire": "9:58"
+        }
+      ]
+    },
+    {
+      "id": "50m Haies (65) / BEM",
+      "name": "50m Haies (65) / BEM",
+      "horaire": "10:27, 10:35",
+      "seriesSchedule": {
+        "1": "10:27",
+        "2": "10:35",
+        "finale 1": "10:27",
+        "finale- 1": "10:27",
+        "finale 2": "10:35",
+        "finale- 2": "10:35"
+      },
+      "participants": [
+        {
+          "athleteId": "3525710",
+          "athleteName": "JUTEAU Logann",
+          "epreuveName": "50m Haies (65) / BEM",
+          "performance": "3. 10''09 (-0.7)",
+          "series": "Finale 2",
+          "dossard": "20",
+          "category": "BEM/13",
+          "date": "13/06",
+          "horaire": "10:35"
+        },
+        {
+          "athleteId": "2827412",
+          "athleteName": "TERTOIS LEMOINE Raphael",
+          "epreuveName": "50m Haies (65) / BEM",
+          "performance": "2. 9''53 (-0.3)",
+          "series": "Finale 1",
+          "dossard": "30",
+          "category": "BEM/13",
+          "date": "13/06",
+          "horaire": "10:27"
+        }
+      ]
+    },
+    {
+      "id": "Disque (1.0 kg) / BEM",
+      "name": "Disque (1.0 kg) / BEM",
+      "horaire": "14:00",
+      "seriesSchedule": {
+        "finale- gp sprint": "11:15",
+        "gp sprint": "11:15",
+        "finale- gp df-marche": "13:18",
+        "gp df-marche": "13:18",
+        "finale- gp haies": "14:00",
+        "gp haies": "14:00"
+      },
+      "participants": [
+        {
+          "athleteId": "2827412",
+          "athleteName": "TERTOIS LEMOINE Raphael",
+          "epreuveName": "Disque (1.0 kg) / BEM",
+          "performance": "2. 20m76",
+          "series": "Finale- Gp Haies",
+          "dossard": "34",
+          "category": "BEM/13",
+          "date": "13/06",
+          "horaire": "14:00"
+        }
+      ]
+    },
+    {
+      "id": "Hauteur / BEF",
+      "name": "Hauteur / BEF",
+      "horaire": "14:00",
+      "seriesSchedule": {
+        "finale- gp df-marche": "10:10",
+        "gp df-marche": "10:10",
+        "finale- gp sprint": "14:00",
+        "gp sprint": "14:00"
+      },
+      "participants": [
+        {
+          "athleteId": "3448385",
+          "athleteName": "ROBLET Cassandre",
+          "epreuveName": "Hauteur / BEF",
+          "performance": "9. 1m07",
+          "series": "Finale- Gp Sprint",
+          "dossard": "13",
+          "category": "BEF/13",
+          "date": "13/06",
+          "horaire": "14:00"
+        }
+      ]
+    },
+    {
+      "id": "Hauteur / BEM",
+      "name": "Hauteur / BEM",
+      "horaire": "11:00",
+      "seriesSchedule": {
+        "finale- gp df-marche": "11:00",
+        "gp df-marche": "11:00",
+        "finale- gp haies": "13:00",
+        "gp haies": "13:00",
+        "finale- gp sprint": "15:10",
+        "gp sprint": "15:10"
+      },
+      "participants": [
+        {
+          "athleteId": "2506216",
+          "athleteName": "ALVARO SAUBAIGNE Oscar",
+          "epreuveName": "Hauteur / BEM",
+          "performance": "4. 1m24",
+          "series": "Finale- Gp Df-Mar",
+          "dossard": "29",
+          "category": "BEM/13",
+          "date": "13/06",
+          "horaire": "11:00"
+        },
+        {
+          "athleteId": "3121240",
+          "athleteName": "MONIER Lucas",
+          "epreuveName": "Hauteur / BEM",
+          "performance": "3. 1m28",
+          "series": "Finale- Gp Df-Mar",
+          "dossard": "31",
+          "category": "BEM/13",
+          "date": "13/06",
+          "horaire": "11:00"
+        }
+      ]
+    },
+    {
+      "id": "Javelot (500 g) / BEM",
+      "name": "Javelot (500 g) / BEM",
+      "horaire": "11:00",
+      "seriesSchedule": {
+        "finale 1- gp sprint": "11:00",
+        "1- gp sprint": "11:00",
+        "finale- 1- gp sprint": "11:00",
+        "finale- gp df-marche": "13:20",
+        "gp df-marche": "13:20",
+        "finale- gp haies": "14:36",
+        "gp haies": "14:36",
+        "finale 2- gp sprint": "11:37",
+        "2- gp sprint": "11:37",
+        "finale- 2- gp sprint": "11:37"
+      },
+      "participants": [
+        {
+          "athleteId": "3121316",
+          "athleteName": "GOUPIL LANDAIS Vadim",
+          "epreuveName": "Javelot (500 g) / BEM",
+          "performance": "5. 18m13",
+          "series": "Finale 1- Gp Spri",
+          "dossard": "30",
+          "category": "BEM/13",
+          "date": "13/06",
+          "horaire": "11:00"
+        }
+      ]
+    },
+    {
+      "id": "Longueur / BEF",
+      "name": "Longueur / BEF",
+      "horaire": "10:20",
+      "seriesSchedule": {
+        "finale 1- gp df-marche": "10:20",
+        "1- gp df-marche": "10:20",
+        "finale- 1- gp df-marche": "10:20",
+        "finale- gp haies": "12:30",
+        "gp haies": "12:30",
+        "finale 1- gp sprint": "13:30",
+        "1- gp sprint": "13:30",
+        "finale- 1- gp sprint": "13:30",
+        "finale 2- gp sprint": "14:20",
+        "2- gp sprint": "14:20",
+        "finale- 2- gp sprint": "14:20",
+        "finale 3- gp sprint": "15:10",
+        "3- gp sprint": "15:10",
+        "finale- 3- gp sprint": "15:10",
+        "finale 4-gp sprint": "15:05",
+        "4-gp sprint": "15:05",
+        "finale- 4-gp sprint": "15:05",
+        "finale 2- gp df-marche": "10:50",
+        "2- gp df-marche": "10:50",
+        "finale- 2- gp df-marche": "10:50"
+      },
+      "participants": [
+        {
+          "athleteId": "3157898",
+          "athleteName": "DE CHALAIN Elise",
+          "epreuveName": "Longueur / BEF",
+          "performance": "2. 4m06 (-0.5)",
+          "series": "Finale 1- Gp Df-M",
+          "dossard": "35",
+          "category": "BEF/13",
+          "date": "13/06",
+          "horaire": "10:20"
+        }
+      ]
+    },
+    {
+      "id": "Marteau (2 kg) / BEF",
+      "name": "Marteau (2 kg) / BEF",
+      "horaire": "12:30",
+      "seriesSchedule": {
+        "finale- gp sprint": "10:05",
+        "gp sprint": "10:05",
+        "finale- gp df-marche": "12:30",
+        "gp df-marche": "12:30",
+        "finale- gp haies": "14:00",
+        "gp haies": "14:00"
+      },
+      "participants": [
+        {
+          "athleteId": "3461188",
+          "athleteName": "CHASTRES Emma",
+          "epreuveName": "Marteau (2 kg) / BEF",
+          "performance": "4. 18m06",
+          "series": "Finale- Gp Df-Mar",
+          "dossard": "19",
+          "category": "BEF/13",
+          "date": "13/06",
+          "horaire": "12:30"
+        }
+      ]
+    },
+    {
+      "id": "Perche / BEF",
+      "name": "Perche / BEF",
+      "horaire": "10:30",
+      "seriesSchedule": {
+        "finale": "10:30"
+      },
+      "participants": [
+        {
+          "athleteId": "3484724",
+          "athleteName": "PEGUIN Charlotte",
+          "epreuveName": "Perche / BEF",
+          "performance": "3. 1m75",
+          "series": "Finale",
+          "dossard": "18",
+          "category": "BEF/13",
+          "date": "13/06",
+          "horaire": "10:30"
+        }
+      ]
+    },
+    {
+      "id": "Poids (2 kg) / BEF",
+      "name": "Poids (2 kg) / BEF",
+      "horaire": "10:00, 13:54",
+      "seriesSchedule": {
+        "finale- gp sprint": "10:00",
+        "gp sprint": "10:00",
+        "finale- gp df-marche": "12:28",
+        "gp df-marche": "12:28",
+        "finale- gp haies": "13:54",
+        "gp haies": "13:54"
+      },
+      "participants": [
+        {
+          "athleteId": "3503600",
+          "athleteName": "ANNEZO Louise",
+          "epreuveName": "Poids (2 kg) / BEF",
+          "performance": "1. 6m33",
+          "series": "Finale- Gp Haies",
+          "dossard": "27",
+          "category": "BEF/14",
+          "date": "13/06",
+          "horaire": "13:54"
+        },
+        {
+          "athleteId": "3484724",
+          "athleteName": "PEGUIN Charlotte",
+          "epreuveName": "Poids (2 kg) / BEF",
+          "performance": "2. 5m72",
+          "series": "Finale- Gp Haies",
+          "dossard": "18",
+          "category": "BEF/13",
+          "date": "13/06",
+          "horaire": "13:54"
+        },
+        {
+          "athleteId": "3448385",
+          "athleteName": "ROBLET Cassandre",
+          "epreuveName": "Poids (2 kg) / BEF",
+          "performance": "2. 7m69",
+          "series": "Finale- Gp Sprint",
+          "dossard": "33",
+          "category": "BEF/13",
+          "date": "13/06",
+          "horaire": "10:00"
+        }
+      ]
+    },
+    {
+      "id": "Poids (3 kg) / BEM",
+      "name": "Poids (3 kg) / BEM",
+      "horaire": "14:00",
+      "seriesSchedule": {
+        "finale- gp sprint": "10:55",
+        "gp sprint": "10:55",
+        "finale- gp df-marche": "13:20",
+        "gp df-marche": "13:20",
+        "finale- gp haies": "14:00",
+        "gp haies": "14:00"
+      },
+      "participants": [
+        {
+          "athleteId": "3525710",
+          "athleteName": "JUTEAU Logann",
+          "epreuveName": "Poids (3 kg) / BEM",
+          "performance": "1. 6m18",
+          "series": "Finale- Gp Haies",
+          "dossard": "25",
+          "category": "BEM/13",
+          "date": "13/06",
+          "horaire": "14:00"
+        }
+      ]
+    },
+    {
+      "id": "Triple saut / BEF",
+      "name": "Triple saut / BEF",
+      "horaire": "12:30",
+      "seriesSchedule": {
+        "finale- gp df-marche": "10:20",
+        "gp df-marche": "10:20",
+        "finale- gp haies": "12:30",
+        "gp haies": "12:30",
+        "finale- gp sprint": "13:30",
+        "gp sprint": "13:30"
+      },
+      "participants": [
+        {
+          "athleteId": "3121225",
+          "athleteName": "CHEVALIER Liv",
+          "epreuveName": "Triple saut / BEF",
+          "performance": "6. 8m54 (+1.1)",
+          "series": "Finale- Gp Haies",
+          "dossard": "31",
+          "category": "BEF/13",
+          "date": "13/06",
+          "horaire": "12:30"
+        }
+      ]
+    },
+    {
+      "id": "Triple saut / BEM",
+      "name": "Triple saut / BEM",
+      "horaire": "13:30",
+      "seriesSchedule": {
+        "finale- gp df-marche": "10:20",
+        "gp df-marche": "10:20",
+        "finale- gp haies": "12:30",
+        "gp haies": "12:30",
+        "finale- gp sprint": "13:30",
+        "gp sprint": "13:30"
+      },
+      "participants": [
+        {
+          "athleteId": "3526060",
+          "athleteName": "PALY-PORQUET Samuel",
+          "epreuveName": "Triple saut / BEM",
+          "performance": "NP (NC)",
+          "series": "Finale- Gp Sprint",
+          "dossard": "0",
+          "category": "BEM/13",
+          "date": "13/06",
+          "horaire": "13:30"
+        }
+      ]
+    }
+  ],
+  "driveFile": "2026-06-13_Championnats_de_Gironde_Epreuves_Individuelles_U14.json"
+}

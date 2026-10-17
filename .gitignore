@@ -1,0 +1,9 @@
+node_modules/
+google_script/config.js
+google_script/output/
+*.local.json
+.DS_Store
+Thumbs.db
+*.log
+.env
+.env.*

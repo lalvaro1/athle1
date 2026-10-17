@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CA Béglais, Agenda U14/U16</title>
+    <link rel="icon" href="https://www.cabeglais.fr/app/uploads/2022/04/cropped-logo-32x32.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="hero">
+        <div class="hero__media" aria-hidden="true"></div>
+        <div class="hero__veil" aria-hidden="true"></div>
+        <div class="hero__inner">
+          <a class="brand" href="https://www.cabeglais.fr/" target="_blank" rel="noopener">
+            <img
+              class="brand__mark"
+              src="https://www.cabeglais.fr/app/uploads/2022/04/cropped-logo.png"
+              width="88"
+              height="88"
+              alt="Logo CA Béglais"
+            />
+            <span class="brand__tag">Athlétisme · depuis 1907</span>
+          </a>
+
+          <div class="hero__copy">
+            <p class="hero__kicker">Section Athlétisme</p>
+            <h1>
+              CA Béglais
+              <span>Agenda <em>U14/U16</em></span>
+            </h1>
+            <p class="hero__lead">
+              Choisissez la compétition du jour, puis suivez le planning des athlètes du club.
+            </p>
+          </div>
+
+          <label class="date-chip">
+            <span>Date</span>
+            <input type="date" id="date-input" />
+          </label>
+        </div>
+      </header>
+
+      <main>
+        <p class="day-line" id="date-label"></p>
+
+        <section class="block" aria-labelledby="competitions-title">
+          <div class="block__head">
+            <h2 id="competitions-title">Compétitions du jour</h2>
+            <p id="status" class="status" role="status"></p>
+          </div>
+          <div id="competitions" class="competition-list"></div>
+        </section>
+
+        <section id="planning" class="block planning" hidden aria-labelledby="planning-title">
+          <div class="block__head">
+            <div>
+              <p class="eyebrow">Planning club</p>
+              <h2 id="planning-title">Épreuves</h2>
+              <p id="planning-place" class="place"></p>
+            </div>
+            <p id="planning-meta" class="status"></p>
+          </div>
+          <div id="schedule" class="schedule"></div>
+        </section>
+      </main>
+
+      <footer class="foot">
+        <a href="https://www.cabeglais.fr/" target="_blank" rel="noopener">cabeglais.fr</a>
+        <span>Section Athlétisme</span>
+      </footer>
+    </div>
+
+    <script src="app.js" type="module"></script>
+  </body>
+</html>

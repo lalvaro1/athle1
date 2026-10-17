@@ -1,0 +1,32 @@
+{
+  "fetchedAt": "2026-10-17T15:27:40.476Z",
+  "date": "2026-06-13",
+  "clubQuery": "Ca Beglais",
+  "youthCategories": [
+    "U14",
+    "U16"
+  ],
+  "calendarCompetitions": 196,
+  "withResultsBeforeYouthFilter": 164,
+  "checkedWithResults": 10,
+  "count": 1,
+  "competitions": [
+    {
+      "resultsId": "319050",
+      "ficheId": "270846433843945843427834682855818852",
+      "calendarDateLabel": "13 juin",
+      "calendarLabel": "Championnats de Gironde Epreuves Individuelles U14",
+      "place": "Talence 033 - N-A",
+      "type": "Stade Championnat",
+      "level": "Départemental",
+      "resultsTitle": "13/06/26 - Championnats de Gironde Epreuves Individuelles U14 — TALENCE - N-A - 033",
+      "club": {
+        "id": "033011",
+        "name": "Ca Beglais"
+      }
+    }
+  ],
+  "driveFiles": {
+    "competitionsList": "competitions_2026-06-13.json"
+  }
+}

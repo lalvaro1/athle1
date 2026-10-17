@@ -1,0 +1,17 @@
+{
+  "name": "athle-web-sync",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync": "node sync-from-web.js",
+    "sync:dry": "node sync-from-web.js --dry-run",
+    "competitions": "node scripts/fetch-competition-ids.mjs",
+    "clubs": "node scripts/fetch-clubs.mjs",
+    "club-competitions": "node scripts/fetch-club-competitions.mjs",
+    "club-epreuves": "node scripts/fetch-club-epreuves.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

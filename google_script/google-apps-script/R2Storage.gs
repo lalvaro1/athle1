@@ -1,0 +1,102 @@
+/**
+ * Upload JSON vers Cloudflare R2 (API REST api.cloudflare.com, Bearer).
+ * Version : rest-bearer-v1
+ *
+ * Token à utiliser : My Profile → API Tokens → Create Token
+ *   Permission : Account → Cloudflare R2 → Edit (ou Object Read & Write)
+ *   PAS les Access Key / Secret de « Manage R2 API Tokens » (c’est pour S3).
+ *
+ * → setR2ApiTokenFromEditor()
+ */
+var R2_STORAGE_VERSION = 'rest-bearer-v1';
+
+function r2GetConfig() {
+  var r2 = ATHLE_CONFIG.R2;
+  if (!r2 || !r2.ACCOUNT_ID || !r2.BUCKET) {
+    throw new Error('Configurez ATHLE_CONFIG.R2 (ACCOUNT_ID, BUCKET)');
+  }
+  var props = PropertiesService.getScriptProperties();
+  var apiToken = props.getProperty('R2_API_TOKEN') || r2.API_TOKEN;
+  if (!apiToken) {
+    throw new Error(
+      'R2 : exécutez setR2ApiTokenFromEditor() avec un token API Cloudflare (Profile → API Tokens, permission R2 Edit).',
+    );
+  }
+  return {
+    accountId: String(r2.ACCOUNT_ID).trim(),
+    bucket: String(r2.BUCKET).trim(),
+    keyPrefix: String(r2.KEY_PREFIX || '').replace(/^\/+|\/+$/g, ''),
+    apiToken: String(apiToken).trim(),
+  };
+}
+
+/** Coller le token API Cloudflare (Profile → API Tokens, R2 Edit). */
+function setR2ApiTokenFromEditor() {
+  PropertiesService.getScriptProperties().setProperty('R2_API_TOKEN', 'COLLEZ_LE_TOKEN_ICI');
+  Logger.log('R2_API_TOKEN enregistré.');
+}
+
+function r2UploadJson(relativeFilename, obj) {
+  var content = JSON.stringify(obj, null, 2);
+  r2PutObject(relativeFilename, 'application/json; charset=utf-8', content);
+}
+
+function r2PutObject(relativeFilename, contentType, body) {
+  var cfg = r2GetConfig();
+  var objectKey = r2BuildObjectKey(cfg.keyPrefix, relativeFilename);
+  var url =
+    'https://api.cloudflare.com/client/v4/accounts/' +
+    encodeURIComponent(cfg.accountId) +
+    '/r2/buckets/' +
+    encodeURIComponent(cfg.bucket) +
+    '/objects/' +
+    r2EncodeObjectPath(objectKey);
+
+  var response = UrlFetchApp.fetch(url, {
+    method: 'put',
+    payload: String(body),
+    muteHttpExceptions: true,
+    headers: {
+      Authorization: 'Bearer ' + cfg.apiToken,
+      'Content-Type': contentType,
+    },
+  });
+
+  var code = response.getResponseCode();
+  if (code < 200 || code >= 300) {
+    var errBody = response.getContentText().slice(0, 500);
+    var hint = '';
+    if (errBody.indexOf('Authentication error') !== -1) {
+      hint =
+        ' [Token incorrect : utilisez Profile → API Tokens (R2 Edit), pas Access Key du dashboard R2.]';
+    }
+    throw new Error('R2 PUT ' + objectKey + ' → HTTP ' + code + ' : ' + errBody + hint);
+  }
+  return { bucket: cfg.bucket, key: objectKey, version: R2_STORAGE_VERSION };
+}
+
+function testR2Upload() {
+  Logger.log('R2_STORAGE_VERSION=%s', R2_STORAGE_VERSION);
+  r2UploadJson('_test/gs-r2-ping.json', {
+    ok: true,
+    version: R2_STORAGE_VERSION,
+    at: new Date().toISOString(),
+  });
+  Logger.log('OK — objet _test/gs-r2-ping.json envoyé');
+}
+
+function r2BuildObjectKey(prefix, filename) {
+  var safe = String(filename).replace(/^\/+/, '');
+  if (prefix) return prefix + '/' + safe;
+  return safe;
+}
+
+function r2EncodeObjectPath(objectKey) {
+  return String(objectKey)
+    .split('/')
+    .map(function (p) {
+      return encodeURIComponent(p);
+    })
+    .join('/');
+}
+
