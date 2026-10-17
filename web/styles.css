@@ -39,9 +39,8 @@ body {
 .hero {
   position: relative;
   overflow: hidden;
-  min-height: min(72vh, 34rem);
-  margin: 0.75rem 0 1.25rem;
-  border-radius: 28px;
+  margin: 0.75rem 0 1rem;
+  border-radius: 22px;
   color: #fff;
   isolation: isolate;
   animation: rise 0.7s ease both;
@@ -56,82 +55,75 @@ body {
 .hero__media {
   background:
     linear-gradient(115deg, rgba(64, 80, 255, 0.35), transparent 55%),
-    url("https://www.cabeglais.fr/app/uploads/2022/03/cab-athletisme.jpg") center / cover;
-  transform: scale(1.04);
+    url("https://www.cabeglais.fr/app/uploads/2022/03/cab-athletisme.jpg") center 35% / cover;
+  transform: scale(1.03);
   animation: drift 18s ease-in-out infinite alternate;
 }
 
 .hero__veil {
   background:
-    linear-gradient(120deg, rgba(26, 34, 140, 0.88) 0%, rgba(64, 80, 255, 0.72) 48%, rgba(230, 143, 23, 0.55) 100%),
-    radial-gradient(circle at 85% 20%, rgba(241, 188, 114, 0.45), transparent 28%);
+    linear-gradient(105deg, rgba(26, 34, 140, 0.9) 0%, rgba(64, 80, 255, 0.78) 55%, rgba(230, 143, 23, 0.58) 100%),
+    radial-gradient(circle at 90% 30%, rgba(241, 188, 114, 0.4), transparent 32%);
 }
 
 .hero__inner {
   position: relative;
   z-index: 1;
   display: grid;
-  gap: 1.6rem;
-  align-content: space-between;
-  min-height: inherit;
-  padding: clamp(1.2rem, 3vw, 1.8rem);
+  grid-template-columns: auto 1fr auto;
+  gap: 0.85rem 1.1rem;
+  align-items: center;
+  padding: 0.95rem 1.1rem;
 }
 
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.85rem;
+  gap: 0.65rem;
   width: fit-content;
   color: inherit;
   text-decoration: none;
 }
 
 .brand__mark {
-  width: 4.2rem;
-  height: 4.2rem;
+  width: 2.75rem;
+  height: 2.75rem;
   object-fit: contain;
-  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.2));
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.2));
   animation: pop 0.8s 0.1s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 .brand__tag {
   color: rgba(255, 255, 255, 0.84);
-  font-size: 0.78rem;
+  font-size: 0.68rem;
   font-weight: 600;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  max-width: 9ch;
+  line-height: 1.25;
 }
 
 .hero__copy {
-  max-width: 14ch;
+  min-width: 0;
   animation: rise 0.8s 0.15s ease both;
-}
-
-.hero__kicker {
-  margin: 0 0 0.55rem;
-  color: var(--cab-orange-soft);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
 }
 
 .hero__copy h1 {
   margin: 0;
-  display: grid;
-  gap: 0.2rem;
-  font-size: clamp(3.2rem, 10vw, 5.4rem);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.65rem;
+  font-size: clamp(1.55rem, 4vw, 2.15rem);
   font-weight: 800;
-  letter-spacing: -0.045em;
-  line-height: 0.9;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
 }
 
 .hero__copy h1 span {
-  display: block;
-  font-size: 0.48em;
+  font-size: 0.72em;
   font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1.05;
+  letter-spacing: -0.02em;
   color: rgba(255, 255, 255, 0.92);
 }
 
@@ -140,44 +132,56 @@ body {
   color: var(--cab-orange-soft);
 }
 
-.hero__lead {
-  margin: 0.95rem 0 0;
-  max-width: 28ch;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 1rem;
-  font-weight: 400;
-  line-height: 1.45;
-}
-
 .date-chip {
+  position: relative;
   display: grid;
-  gap: 0.35rem;
-  justify-self: start;
-  padding: 0.7rem 0.85rem;
+  gap: 0.2rem;
+  justify-self: end;
+  min-width: 11.5rem;
+  min-height: 3.4rem;
+  padding: 0.65rem 0.9rem;
   border: 1px solid rgba(255, 255, 255, 0.28);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.14);
   backdrop-filter: blur(10px);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+  cursor: pointer;
   animation: rise 0.8s 0.25s ease both;
 }
 
+.date-chip:hover,
+.date-chip:focus-within {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
 .date-chip input {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  min-height: 1.5rem;
   border: 0;
   background: transparent;
   color: #fff;
   font: inherit;
-  font-size: 1rem;
+  font-size: 1.05rem;
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
+  cursor: pointer;
 }
 
 .date-chip input::-webkit-calendar-picker-indicator {
-  filter: invert(1);
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
   cursor: pointer;
 }
 
@@ -336,12 +340,21 @@ h2 {
 }
 
 .athletes li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45rem;
   background: linear-gradient(180deg, #fff7ea, #ffe8c2);
   color: #8a5608;
   border-radius: 999px;
   padding: 0.3rem 0.75rem;
   font-size: 0.9rem;
   font-weight: 600;
+}
+
+.athletes .perf {
+  color: var(--cab-blue-deep);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
 }
 
 .empty {
@@ -397,12 +410,23 @@ h2 {
 
 @media (max-width: 700px) {
   .hero {
-    min-height: 28rem;
-    border-radius: 22px;
+    border-radius: 18px;
   }
 
-  .hero__copy {
-    max-width: none;
+  .hero__inner {
+    grid-template-columns: auto 1fr;
+    gap: 0.65rem 0.75rem;
+  }
+
+  .brand__tag {
+    display: none;
+  }
+
+  .date-chip {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+    min-width: 0;
+    min-height: 3.6rem;
   }
 
   .block__head {

@@ -21,6 +21,21 @@ dateInput.addEventListener("change", () => {
   loadDay();
 });
 
+const dateChip = dateInput.closest(".date-chip");
+if (dateChip) {
+  dateChip.addEventListener("click", () => {
+    if (typeof dateInput.showPicker === "function") {
+      try {
+        dateInput.showPicker();
+      } catch {
+        dateInput.focus();
+      }
+    } else {
+      dateInput.focus();
+    }
+  });
+}
+
 loadDay();
 
 function todayInParis() {
@@ -186,8 +201,17 @@ function renderSchedule(schedule) {
     list.className = "athletes";
     for (const athlete of slot.athletes) {
       const item = document.createElement("li");
+      const name = document.createElement("span");
+      name.className = "athlete-name";
       const extra = series.length > 1 && athlete.series ? ` · ${athlete.series}` : "";
-      item.textContent = `${athlete.name}${extra}`;
+      name.textContent = `${athlete.name}${extra}`;
+      item.append(name);
+      if (athlete.performance) {
+        const perf = document.createElement("span");
+        perf.className = "perf";
+        perf.textContent = athlete.performance;
+        item.append(perf);
+      }
       list.append(item);
     }
     body.append(list);
@@ -209,6 +233,7 @@ function buildSchedule(epreuves) {
       groups.get(key).athletes.push({
         name: formatAthleteName(participant.athleteName),
         series: participant.series || "",
+        performance: formatPerformance(participant.performance),
       });
     }
   }
@@ -227,6 +252,12 @@ function timeToMinutes(value) {
   const match = String(value).match(/(\d{1,2})\s*[:h]\s*(\d{2})/);
   if (!match) return 24 * 60 + 1;
   return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function formatPerformance(raw) {
+  let value = String(raw || "").trim();
+  if (!value || /^NP\b/i.test(value)) return "";
+  return value.replace(/^\d+\.\s*/, "").trim();
 }
 
 function formatAthleteName(raw) {
