@@ -1,4 +1,5 @@
 const R2_ORIGIN = "https://pub-e5058c16a56f4bf5ba83dcdbd80dc5b3.r2.dev";
+const R2_DATA_PREFIX = "data";
 
 const dateLabelEl = document.querySelector("#date-label");
 const dateInput = document.querySelector("#date-input");
@@ -38,7 +39,8 @@ function formatLongDate(iso) {
 }
 
 function dataUrl(objectKey) {
-  return `${R2_ORIGIN}/${objectKey}`;
+  const key = String(objectKey).replace(/^\/+/, "");
+  return `${R2_ORIGIN}/${R2_DATA_PREFIX}/${key}`;
 }
 
 async function loadDay() {
