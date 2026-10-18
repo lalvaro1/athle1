@@ -1,156 +1,127 @@
 const R2_ORIGIN = "https://pub-e5058c16a56f4bf5ba83dcdbd80dc5b3.r2.dev";
 const R2_DATA_PREFIX = "data";
 
-const dateLabelEl = document.querySelector("#date-label");
-const dateInput = document.querySelector("#date-input");
 const statusEl = document.querySelector("#status");
-const competitionsEl = document.querySelector("#competitions");
+const competitionSelect = document.querySelector("#competition-select");
 const planningEl = document.querySelector("#planning");
 const planningTitleEl = document.querySelector("#planning-title");
 const planningMetaEl = document.querySelector("#planning-meta");
 const planningPlaceEl = document.querySelector("#planning-place");
+const planningDateEl = document.querySelector("#planning-date");
 const scheduleEl = document.querySelector("#schedule");
 
 const params = new URLSearchParams(location.search);
 let selectedId = params.get("competition");
+/** @type {Array<Record<string, any>>} */
+let competitions = [];
 
-dateInput.value = params.get("date") || todayInParis();
-dateInput.addEventListener("change", () => {
-  selectedId = null;
+competitionSelect.addEventListener("change", () => {
+  selectedId = competitionSelect.value || null;
   syncUrl();
-  loadDay();
+  const chosen = competitions.find((comp) => String(comp.resultsId) === String(selectedId));
+  if (chosen) loadCompetition(chosen);
 });
 
-const dateChip = dateInput.closest(".date-chip");
-if (dateChip) {
-  dateChip.addEventListener("click", () => {
-    if (typeof dateInput.showPicker === "function") {
-      try {
-        dateInput.showPicker();
-      } catch {
-        dateInput.focus();
-      }
-    } else {
-      dateInput.focus();
-    }
-  });
-}
+boot();
 
-loadDay();
-
-function todayInParis() {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris" }).format(new Date());
-}
-
-function formatLongDate(iso) {
-  const [year, month, day] = iso.split("-").map(Number);
-  return new Intl.DateTimeFormat("fr-FR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(Date.UTC(year, month - 1, day)));
-}
-
-function dataUrl(objectKey) {
-  const key = String(objectKey).replace(/^\/+/, "");
-  return `${R2_ORIGIN}/${R2_DATA_PREFIX}/${key}`;
-}
-
-async function loadDay() {
-  const date = dateInput.value;
-  dateLabelEl.textContent = formatLongDate(date);
+async function boot() {
   statusEl.textContent = "Chargement des compétitions…";
-  competitionsEl.replaceChildren();
   planningEl.hidden = true;
   scheduleEl.replaceChildren();
 
   try {
-    const response = await fetch(dataUrl(`competitions_${date}.json`), { cache: "no-store" });
-    if (response.status === 404) {
-      statusEl.textContent = "Aucun fichier publié pour cette date.";
-      competitionsEl.append(message("Les compétitions du jour ne sont pas encore disponibles."));
-      return;
-    }
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const payload = await response.json();
-    const competitions = payload.competitions || [];
+    const payload = await fetch(dataUrl("competitions.json"), { cache: "no-store" }).then(
+      async (response) => {
+        if (response.status === 404) return { competitions: [] };
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      },
+    );
+
+    competitions = sortCompetitionsNewestFirst(payload.competitions || []);
     if (!competitions.length) {
+      competitionSelect.replaceChildren(new Option("Aucune compétition", ""));
+      competitionSelect.disabled = true;
       statusEl.textContent = "0 compétition";
-      competitionsEl.append(message("Aucune compétition du club pour cette date."));
       return;
     }
+
+    fillCompetitionSelect(competitions);
+
+    const chosen =
+      competitions.find((comp) => String(comp.resultsId) === String(selectedId)) ||
+      competitions[0];
+    selectedId = String(chosen.resultsId);
+    competitionSelect.value = selectedId;
+    competitionSelect.disabled = false;
     statusEl.textContent =
       competitions.length === 1 ? "1 compétition" : `${competitions.length} compétitions`;
-    renderCompetitions(competitions);
-    const chosen =
-      competitions.find((comp) => comp.resultsId === selectedId) ||
-      (competitions.length === 1 ? competitions[0] : null);
-    if (chosen) {
-      selectedId = chosen.resultsId;
-      markSelected();
-      syncUrl();
-      await loadCompetition(date, chosen);
-    }
+    syncUrl();
+    await loadCompetition(chosen);
   } catch (error) {
+    competitionSelect.replaceChildren(new Option("Chargement impossible", ""));
+    competitionSelect.disabled = true;
     statusEl.textContent = "Chargement impossible";
-    competitionsEl.append(
-      message("Impossible de lire les compétitions. Vérifiez que le bucket autorise les lectures depuis cette page (CORS)."),
-    );
     console.error(error);
   }
 }
 
-function renderCompetitions(competitions) {
+function sortCompetitionsNewestFirst(list) {
+  return [...list].sort((a, b) => {
+    const da = competitionSortDate(a);
+    const db = competitionSortDate(b);
+    if (da !== db) return db.localeCompare(da);
+    return String(a.calendarLabel || a.resultsTitle || "").localeCompare(
+      String(b.calendarLabel || b.resultsTitle || ""),
+      "fr",
+    );
+  });
+}
+
+function competitionSortDate(comp) {
+  const dates = Array.isArray(comp.dates) && comp.dates.length ? comp.dates : [];
+  const candidates = [comp.date, ...dates].filter(Boolean).map(String);
+  if (!candidates.length) return "";
+  return candidates.sort().at(-1);
+}
+
+function fillCompetitionSelect(list) {
   const fragment = document.createDocumentFragment();
-  for (const comp of competitions) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "competition";
-    button.dataset.id = comp.resultsId;
-    button.setAttribute("aria-pressed", "false");
-
-    const title = document.createElement("span");
-    title.className = "competition-title";
-    title.textContent = comp.calendarLabel || comp.resultsTitle || "Compétition";
-
-    const meta = document.createElement("span");
-    meta.className = "competition-meta";
-    meta.textContent = [comp.place, comp.level, comp.type].filter(Boolean).join(" · ");
-
-    button.append(title, meta);
-    button.addEventListener("click", () => {
-      selectedId = comp.resultsId;
-      markSelected();
-      syncUrl();
-      loadCompetition(dateInput.value, comp);
-    });
-    fragment.append(button);
+  for (const comp of list) {
+    const label = competitionOptionLabel(comp);
+    fragment.append(new Option(label, String(comp.resultsId)));
   }
-  competitionsEl.replaceChildren(fragment);
+  competitionSelect.replaceChildren(fragment);
 }
 
-function markSelected() {
-  for (const button of competitionsEl.querySelectorAll(".competition")) {
-    button.setAttribute("aria-pressed", String(button.dataset.id === selectedId));
-  }
+function competitionOptionLabel(comp) {
+  const date = competitionSortDate(comp);
+  const title = comp.calendarLabel || comp.resultsTitle || `Compétition ${comp.resultsId}`;
+  const when = date ? formatShortDate(date) : "";
+  return when ? `${when} — ${title}` : title;
 }
 
-async function loadCompetition(date, comp) {
+async function loadCompetition(comp) {
   planningEl.hidden = false;
-  planningTitleEl.textContent = comp.calendarLabel || "Épreuves";
-  planningPlaceEl.textContent = [comp.place, comp.level].filter(Boolean).join(" · ");
+  planningTitleEl.textContent = comp.calendarLabel || comp.resultsTitle || "Épreuves";
+  planningPlaceEl.textContent = [comp.place, comp.level, comp.type].filter(Boolean).join(" · ");
+  const date = competitionSortDate(comp);
+  planningDateEl.textContent = date ? formatLongDate(date) : "";
   planningMetaEl.textContent = "Chargement du planning…";
   scheduleEl.replaceChildren();
 
+  const detailDate = comp.date || date;
   const baseName = sanitizeObjectFilename(comp.calendarLabel || comp.resultsTitle || comp.resultsId);
-  const keys = [`${date}_${baseName}.json`];
-  if (comp.resultsId) keys.push(`${date}_${baseName}_${comp.resultsId}.json`);
+  const keys = [];
+  if (comp.detailFile) keys.push(comp.detailFile);
+  if (detailDate) {
+    keys.push(`${detailDate}_${baseName}.json`);
+    if (comp.resultsId) keys.push(`${detailDate}_${baseName}_${comp.resultsId}.json`);
+  }
 
   try {
     let payload = null;
-    for (const key of keys) {
+    for (const key of [...new Set(keys)]) {
       const response = await fetch(dataUrl(key), { cache: "no-store" });
       if (response.ok) {
         payload = await response.json();
@@ -201,11 +172,11 @@ function renderSchedule(schedule) {
     list.className = "athletes";
     for (const athlete of slot.athletes) {
       const item = document.createElement("li");
-      const name = document.createElement("span");
-      name.className = "athlete-name";
+      const athleteName = document.createElement("span");
+      athleteName.className = "athlete-name";
       const extra = series.length > 1 && athlete.series ? ` · ${athlete.series}` : "";
-      name.textContent = `${athlete.name}${extra}`;
-      item.append(name);
+      athleteName.textContent = `${athlete.name}${extra}`;
+      item.append(athleteName);
       if (athlete.performance) {
         const perf = document.createElement("span");
         perf.className = "perf";
@@ -261,7 +232,10 @@ function formatPerformance(raw) {
 }
 
 function formatAthleteName(raw) {
-  const parts = String(raw || "").trim().split(/\s+/).filter(Boolean);
+  const parts = String(raw || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
   const surnames = [];
   const givens = [];
   for (const part of parts) {
@@ -290,9 +264,34 @@ function sanitizeObjectFilename(name) {
     .substring(0, 72);
 }
 
+function formatLongDate(iso) {
+  const [year, month, day] = iso.split("-").map(Number);
+  return new Intl.DateTimeFormat("fr-FR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month - 1, day)));
+}
+
+function formatShortDate(iso) {
+  const [year, month, day] = iso.split("-").map(Number);
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month - 1, day)));
+}
+
+function dataUrl(objectKey) {
+  const key = String(objectKey).replace(/^\/+/, "");
+  return `${R2_ORIGIN}/${R2_DATA_PREFIX}/${key}`;
+}
+
 function syncUrl() {
   const next = new URLSearchParams();
-  if (dateInput.value) next.set("date", dateInput.value);
   if (selectedId) next.set("competition", selectedId);
   const query = next.toString();
   history.replaceState(null, "", query ? `?${query}` : location.pathname);

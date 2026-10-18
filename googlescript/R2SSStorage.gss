@@ -1,203 +1,214 @@
 /**
-
- * Upload JSON vers Cloudflare R2 (API REST api.cloudflare.com, Bearer).
-
+ * Upload / download JSON vers Cloudflare R2 (API REST api.cloudflare.com, Bearer).
  * Version : rest-bearer-v1
-
  *
-
- * Token à utiliser : My Profile → API Tokens → Create Token
-
+ * Token : My Profile → API Tokens → Create Token
  *   Permission : Account → Cloudflare R2 → Edit (ou Object Read & Write)
-
  *   PAS les Access Key / Secret de « Manage R2 API Tokens » (c’est pour S3).
-
  *
-
  * → setR2ApiTokenFromEditor()
-
  */
-
 var R2_STORAGE_VERSION = 'rest-bearer-v1';
 
-
-
 function r2GetConfig() {
-
   var r2 = ATHLE_CONFIG.R2;
-
   if (!r2 || !r2.ACCOUNT_ID || !r2.BUCKET) {
-
     throw new Error('Configurez ATHLE_CONFIG.R2 (ACCOUNT_ID, BUCKET)');
-
   }
 
   var props = PropertiesService.getScriptProperties();
-
   var apiToken = props.getProperty('R2_API_TOKEN') || r2.API_TOKEN;
-
   if (!apiToken) {
-
     throw new Error(
-
       'R2 : exécutez setR2ApiTokenFromEditor() avec un token API Cloudflare (Profile → API Tokens, permission R2 Edit).',
-
     );
-
   }
 
   return {
-
     accountId: String(r2.ACCOUNT_ID).trim(),
-
     bucket: String(r2.BUCKET).trim(),
-
     keyPrefix: String(r2.KEY_PREFIX || '').replace(/^\/+|\/+$/g, ''),
-
     apiToken: String(apiToken).trim(),
-
   };
-
 }
-
-
 
 /** Coller le token API Cloudflare (Profile → API Tokens, R2 Edit). */
-
 function setR2ApiTokenFromEditor() {
-
   PropertiesService.getScriptProperties().setProperty('R2_API_TOKEN', '-');
-
   Logger.log('R2_API_TOKEN enregistré.');
-
 }
 
-
+function r2ObjectUrl(objectKey) {
+  var cfg = r2GetConfig();
+  return (
+    'https://api.cloudflare.com/client/v4/accounts/' +
+    encodeURIComponent(cfg.accountId) +
+    '/r2/buckets/' +
+    encodeURIComponent(cfg.bucket) +
+    '/objects/' +
+    r2EncodeObjectPath(objectKey)
+  );
+}
 
 function r2UploadJson(relativeFilename, obj) {
-
   var content = JSON.stringify(obj, null, 2);
-
-  r2PutObject(relativeFilename, 'application/json; charset=utf-8', content);
-
+  return r2PutObject(relativeFilename, 'application/json; charset=utf-8', content);
 }
 
-
-
 function r2PutObject(relativeFilename, contentType, body) {
-
   var cfg = r2GetConfig();
-
   var objectKey = r2BuildObjectKey(cfg.keyPrefix, relativeFilename);
-
-  var url =
-
-    'https://api.cloudflare.com/client/v4/accounts/' +
-
-    encodeURIComponent(cfg.accountId) +
-
-    '/r2/buckets/' +
-
-    encodeURIComponent(cfg.bucket) +
-
-    '/objects/' +
-
-    r2EncodeObjectPath(objectKey);
-
-
-
-  var response = UrlFetchApp.fetch(url, {
-
+  var response = UrlFetchApp.fetch(r2ObjectUrl(objectKey), {
     method: 'put',
-
     payload: String(body),
-
     muteHttpExceptions: true,
-
     headers: {
-
       Authorization: 'Bearer ' + cfg.apiToken,
-
       'Content-Type': contentType,
-
     },
-
   });
 
-
-
   var code = response.getResponseCode();
-
   if (code < 200 || code >= 300) {
-
     var errBody = response.getContentText().slice(0, 500);
-
     var hint = '';
-
     if (errBody.indexOf('Authentication error') !== -1) {
-
       hint =
-
         ' [Token incorrect : utilisez Profile → API Tokens (R2 Edit), pas Access Key du dashboard R2.]';
-
     }
-
     throw new Error('R2 PUT ' + objectKey + ' → HTTP ' + code + ' : ' + errBody + hint);
-
   }
 
   return { bucket: cfg.bucket, key: objectKey, version: R2_STORAGE_VERSION };
-
 }
 
+/**
+ * Lit un JSON R2. Retourne null si l’objet n’existe pas (404).
+ * @param {string} relativeFilename
+ * @return {Object|null}
+ */
+function r2DownloadJson(relativeFilename) {
+  var cfg = r2GetConfig();
+  var objectKey = r2BuildObjectKey(cfg.keyPrefix, relativeFilename);
+  return r2DownloadJsonByObjectKey(objectKey);
+}
 
-
-function testR2Upload() {
-
-  Logger.log('R2_STORAGE_VERSION=%s', R2_STORAGE_VERSION);
-
-  r2UploadJson('_test/gs-r2-ping.json', {
-
-    ok: true,
-
-    version: R2_STORAGE_VERSION,
-
-    at: new Date().toISOString(),
-
+/**
+ * Lit un JSON via sa clé objet complète (ex. data/foo.json).
+ * @param {string} objectKey
+ * @return {Object|null}
+ */
+function r2DownloadJsonByObjectKey(objectKey) {
+  var cfg = r2GetConfig();
+  var response = UrlFetchApp.fetch(r2ObjectUrl(objectKey), {
+    method: 'get',
+    muteHttpExceptions: true,
+    headers: {
+      Authorization: 'Bearer ' + cfg.apiToken,
+    },
   });
 
-  Logger.log('OK — objet _test/gs-r2-ping.json envoyé');
+  var code = response.getResponseCode();
+  if (code === 404) return null;
+  if (code < 200 || code >= 300) {
+    throw new Error(
+      'R2 GET ' + objectKey + ' → HTTP ' + code + ' : ' + response.getContentText().slice(0, 500),
+    );
+  }
 
+  var text = response.getContentText();
+  if (!text) return null;
+  return JSON.parse(text);
 }
 
+/**
+ * Liste les clés d’objets du bucket (pagination cursor).
+ * @param {string=} prefixOverride préfixe bucket (défaut = KEY_PREFIX, ex. "data")
+ * @return {string[]}
+ */
+function r2ListObjectKeys(prefixOverride) {
+  var cfg = r2GetConfig();
+  var prefix =
+    prefixOverride != null && String(prefixOverride) !== ''
+      ? String(prefixOverride).replace(/^\/+|\/+$/g, '')
+      : String(cfg.keyPrefix || '').replace(/^\/+|\/+$/g, '');
+  var listPrefix = prefix ? prefix + '/' : '';
 
+  var keys = [];
+  var cursor = '';
+  var guard = 0;
+
+  while (true) {
+    var url =
+      'https://api.cloudflare.com/client/v4/accounts/' +
+      encodeURIComponent(cfg.accountId) +
+      '/r2/buckets/' +
+      encodeURIComponent(cfg.bucket) +
+      '/objects?per_page=1000';
+    if (listPrefix) url += '&prefix=' + encodeURIComponent(listPrefix);
+    if (cursor) url += '&cursor=' + encodeURIComponent(cursor);
+
+    var response = UrlFetchApp.fetch(url, {
+      method: 'get',
+      muteHttpExceptions: true,
+      headers: {
+        Authorization: 'Bearer ' + cfg.apiToken,
+      },
+    });
+
+    var code = response.getResponseCode();
+    var bodyText = response.getContentText();
+    if (code < 200 || code >= 300) {
+      throw new Error('R2 LIST → HTTP ' + code + ' : ' + bodyText.slice(0, 500));
+    }
+
+    var body = JSON.parse(bodyText);
+    if (body.success === false) {
+      throw new Error('R2 LIST error : ' + bodyText.slice(0, 500));
+    }
+
+    var items = body.result || [];
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      var key = typeof item === 'string' ? item : item.key || item.name || null;
+      if (key) keys.push(String(key));
+    }
+
+    var info = body.result_info || {};
+    if (info.is_truncated && info.cursor) {
+      cursor = info.cursor;
+    } else {
+      break;
+    }
+
+    guard += 1;
+    if (guard > 100) throw new Error('R2 LIST : trop de pages (>100)');
+  }
+
+  return keys;
+}
+
+function testR2Upload() {
+  Logger.log('R2_STORAGE_VERSION=%s', R2_STORAGE_VERSION);
+  r2UploadJson('_test/gs-r2-ping.json', {
+    ok: true,
+    version: R2_STORAGE_VERSION,
+    at: new Date().toISOString(),
+  });
+  Logger.log('OK — objet _test/gs-r2-ping.json envoyé');
+}
 
 function r2BuildObjectKey(prefix, filename) {
-
   var safe = String(filename).replace(/^\/+/, '');
-
   if (prefix) return prefix + '/' + safe;
-
   return safe;
-
 }
-
-
 
 function r2EncodeObjectPath(objectKey) {
-
   return String(objectKey)
-
     .split('/')
-
     .map(function (p) {
-
       return encodeURIComponent(p);
-
     })
-
     .join('/');
-
 }
-
-

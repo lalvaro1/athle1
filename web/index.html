@@ -36,23 +36,18 @@
               <span>Agenda <em>U14/U16</em></span>
             </h1>
           </div>
-
-          <label class="date-chip">
-            <span>Date</span>
-            <input type="date" id="date-input" />
-          </label>
         </div>
       </header>
 
       <main>
-        <p class="day-line" id="date-label"></p>
-
-        <section class="block" aria-labelledby="competitions-title">
-          <div class="block__head">
-            <h2 id="competitions-title">Compétitions du jour</h2>
-            <p id="status" class="status" role="status"></p>
-          </div>
-          <div id="competitions" class="competition-list"></div>
+        <section class="block picker-block" aria-labelledby="competition-label">
+          <label class="comp-picker" for="competition-select">
+            <span id="competition-label">Compétition</span>
+            <select id="competition-select" disabled>
+              <option value="">Chargement…</option>
+            </select>
+          </label>
+          <p id="status" class="status" role="status"></p>
         </section>
 
         <section id="planning" class="block planning" hidden aria-labelledby="planning-title">
@@ -61,6 +56,7 @@
               <p class="eyebrow">Planning club</p>
               <h2 id="planning-title">Épreuves</h2>
               <p id="planning-place" class="place"></p>
+              <p id="planning-date" class="place"></p>
             </div>
             <p id="planning-meta" class="status"></p>
           </div>
