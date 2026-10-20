@@ -7,7 +7,6 @@ const planningEl = document.querySelector("#planning");
 const planningTitleEl = document.querySelector("#planning-title");
 const planningMetaEl = document.querySelector("#planning-meta");
 const planningPlaceEl = document.querySelector("#planning-place");
-const planningDateEl = document.querySelector("#planning-date");
 const scheduleEl = document.querySelector("#schedule");
 
 const params = new URLSearchParams(location.search);
@@ -98,15 +97,57 @@ function competitionOptionLabel(comp) {
   const date = competitionSortDate(comp);
   const title = comp.calendarLabel || comp.resultsTitle || `Compétition ${comp.resultsId}`;
   const when = date ? formatShortDate(date) : "";
-  return when ? `${when} — ${title}` : title;
+  const location = formatCompetitionLocation(comp);
+  const head = when ? `${when} — ${title}` : title;
+  return location ? `${head} — ${location}` : head;
+}
+
+/**
+ * Ville + département depuis `place` ou la fin de `resultsTitle`
+ * (ex. "… — TALENCE - N-A - 033").
+ * @returns {{ city: string, department: string } | null}
+ */
+function competitionLocation(comp) {
+  const fromPlace = parseLocationFromPlace(comp.place);
+  if (fromPlace) return fromPlace;
+  return parseLocationFromResultsTitle(comp.resultsTitle);
+}
+
+function parseLocationFromPlace(place) {
+  const text = String(place || "").trim();
+  if (!text) return null;
+  const match = text.match(/^(.+?)\s+(\d{2,3})(?:\s*-\s*.*)?$/);
+  if (!match) return null;
+  return { city: toTitle(match[1].trim()), department: match[2] };
+}
+
+function parseLocationFromResultsTitle(resultsTitle) {
+  const text = String(resultsTitle || "").trim();
+  if (!text) return null;
+  const tail = text.includes("—") ? text.split("—").pop().trim() : "";
+  if (!tail) return null;
+  // "TALENCE - N-A - 033" ou "SAINT JEAN DE LUZ - N-A - 064"
+  const match = tail.match(/^(.+?)\s+-\s+\S+\s+-\s+(\d{2,3})$/);
+  if (match) return { city: toTitle(match[1].trim()), department: match[2] };
+  const short = tail.match(/^(.+?)\s+-\s+(\d{2,3})$/);
+  if (short) return { city: toTitle(short[1].trim()), department: short[2] };
+  return null;
+}
+
+function formatCompetitionLocation(comp) {
+  const loc = competitionLocation(comp);
+  if (!loc) return "";
+  return `${loc.city} (${String(Number(loc.department))})`;
 }
 
 async function loadCompetition(comp) {
   planningEl.hidden = false;
   planningTitleEl.textContent = comp.calendarLabel || comp.resultsTitle || "Épreuves";
-  planningPlaceEl.textContent = [comp.place, comp.level, comp.type].filter(Boolean).join(" · ");
   const date = competitionSortDate(comp);
-  planningDateEl.textContent = date ? formatLongDate(date) : "";
+  const when = date ? formatLongDate(date) : "";
+  const location = formatCompetitionLocation(comp);
+  planningPlaceEl.textContent =
+    when && location ? `${when} à ${location}` : when || location;
   planningMetaEl.textContent = "Chargement du planning…";
   scheduleEl.replaceChildren();
 
@@ -130,8 +171,11 @@ async function loadCompetition(comp) {
     }
     if (!payload) throw new Error("Fichier de compétition introuvable");
     const schedule = buildSchedule(payload.epreuves);
-    const athleteCount = schedule.reduce((sum, slot) => sum + slot.athletes.length, 0);
-    planningMetaEl.textContent = `${schedule.length} créneau${schedule.length > 1 ? "x" : ""} · ${athleteCount} participation${athleteCount > 1 ? "s" : ""}`;
+    const athleteCount = new Set(
+      schedule.flatMap((slot) => slot.athletes.map((athlete) => athlete.name)),
+    ).size;
+    planningMetaEl.textContent =
+      athleteCount === 1 ? "1 athlète" : `${athleteCount} athlètes`;
     renderSchedule(schedule);
   } catch (error) {
     planningMetaEl.textContent = "Planning indisponible";
@@ -266,13 +310,14 @@ function sanitizeObjectFilename(name) {
 
 function formatLongDate(iso) {
   const [year, month, day] = iso.split("-").map(Number);
-  return new Intl.DateTimeFormat("fr-FR", {
+  const formatted = new Intl.DateTimeFormat("fr-FR", {
     weekday: "long",
     day: "numeric",
     month: "long",
     year: "numeric",
     timeZone: "UTC",
   }).format(new Date(Date.UTC(year, month - 1, day)));
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1);
 }
 
 function formatShortDate(iso) {
