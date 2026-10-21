@@ -32,7 +32,11 @@ competitionSelect.addEventListener("change", () => {
 scheduleEl.addEventListener("click", (event) => {
   const target = event.target.closest("[data-athlete-key]");
   if (!target) return;
-  openAthleteDialog(target.dataset.athleteKey, target.dataset.eventName || "");
+  openAthleteDialog(
+    target.dataset.athleteKey,
+    target.dataset.eventName || "",
+    target.dataset.athleteName || "",
+  );
 });
 
 boot();
@@ -87,6 +91,7 @@ async function loadAthletesIndex() {
   athletesById.clear();
   athletesByNameKey.clear();
   try {
+    const url = dataUrl("athletes.json");
     const payload = await fetchJson("athletes.json", { athletes: [] });
     for (const athlete of payload.athletes || []) {
       if (!athlete?.athleteId) continue;
@@ -94,6 +99,7 @@ async function loadAthletesIndex() {
       const key = athleteNameKey(athlete.name);
       if (key) athletesByNameKey.set(key, athlete);
     }
+    console.info(`athletes.json OK (${athletesById.size}) ← ${url}`);
   } catch (error) {
     console.warn("athletes.json indisponible", error);
   }
@@ -249,7 +255,6 @@ function renderSchedule(schedule) {
     const list = document.createElement("ul");
     list.className = "athletes";
     for (const athlete of slot.athletes) {
-      const record = findAthleteRecord(athlete);
       const item = document.createElement("li");
       const athleteName = document.createElement("span");
       athleteName.className = "athlete-name";
@@ -262,20 +267,19 @@ function renderSchedule(schedule) {
         perf.textContent = athlete.performance;
         item.append(perf);
       }
-      if (record) {
-        item.classList.add("is-clickable");
-        item.tabIndex = 0;
-        item.dataset.athleteKey = athleteLookupKey(athlete);
-        item.dataset.eventName = slot.eventName;
-        item.setAttribute("role", "button");
-        item.setAttribute("aria-label", `Voir PB et SB de ${athlete.name}`);
-        item.addEventListener("keydown", (event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            openAthleteDialog(item.dataset.athleteKey, slot.eventName);
-          }
-        });
-      }
+      item.classList.add("is-clickable");
+      item.tabIndex = 0;
+      item.dataset.athleteKey = athleteLookupKey(athlete);
+      item.dataset.athleteName = athlete.name;
+      item.dataset.eventName = slot.eventName;
+      item.setAttribute("role", "button");
+      item.setAttribute("aria-label", `Voir PB et SB de ${athlete.name}`);
+      item.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openAthleteDialog(item.dataset.athleteKey, slot.eventName, athlete.name);
+        }
+      });
       list.append(item);
     }
     body.append(list);
@@ -369,34 +373,44 @@ function matchAthleteEvent(record, eventName) {
   return bestScore > 0 ? best : null;
 }
 
-function openAthleteDialog(lookupKey, eventName) {
+function openAthleteDialog(lookupKey, eventName, fallbackName = "") {
+  if (!athleteDialog) return;
   const record = findAthleteRecordByKey(lookupKey);
-  if (!record || !athleteDialog) return;
 
-  athleteDialogTitle.textContent = formatAthleteName(record.name);
-  athleteDialogMeta.textContent = [record.youthCategory, record.categoryCode]
-    .filter(Boolean)
-    .join(" · ");
-
-  const focusEvent = matchAthleteEvent(record, eventName);
-  const otherEvents = (record.events || []).filter(
-    (entry) => !focusEvent || entry.event !== focusEvent.event,
-  );
+  athleteDialogTitle.textContent = formatAthleteName(record?.name || fallbackName || "Athlète");
+  athleteDialogMeta.textContent = record
+    ? [record.youthCategory, record.categoryCode].filter(Boolean).join(" · ")
+    : athletesById.size
+      ? "Pas encore dans la base athlètes"
+      : "Base athlètes non chargée";
 
   athleteDialogBody.replaceChildren();
-  if (focusEvent) {
-    athleteDialogBody.append(renderAthleteEventCard(focusEvent, true));
-  }
-  for (const entry of otherEvents) {
-    athleteDialogBody.append(renderAthleteEventCard(entry, false));
-  }
-  if (!focusEvent && !otherEvents.length) {
+  if (!record) {
     athleteDialogBody.append(
       Object.assign(document.createElement("p"), {
         className: "athlete-dialog__empty",
-        textContent: "Aucune performance PB/SB disponible pour cet athlète.",
+        textContent: athletesById.size
+          ? "Cet athlète n’est pas encore présent dans athletes.json. Relance runAthleSyncAthletes."
+          : "Impossible de charger athletes.json depuis R2.",
       }),
     );
+  } else {
+    const focusEvent = matchAthleteEvent(record, eventName);
+    const otherEvents = (record.events || []).filter(
+      (entry) => !focusEvent || entry.event !== focusEvent.event,
+    );
+    if (focusEvent) athleteDialogBody.append(renderAthleteEventCard(focusEvent, true));
+    for (const entry of otherEvents) {
+      athleteDialogBody.append(renderAthleteEventCard(entry, false));
+    }
+    if (!focusEvent && !otherEvents.length) {
+      athleteDialogBody.append(
+        Object.assign(document.createElement("p"), {
+          className: "athlete-dialog__empty",
+          textContent: "Aucune performance PB/SB disponible pour cet athlète.",
+        }),
+      );
+    }
   }
 
   if (typeof athleteDialog.showModal === "function") athleteDialog.showModal();

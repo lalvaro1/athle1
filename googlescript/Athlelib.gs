@@ -732,6 +732,12 @@ function athleGetClubYouthAthletes(options) {
     }
   }
 
+  var fromCompetitions = 0;
+  if (options.includeCompetitionAthletes !== false) {
+    fromCompetitions = athleMergeAthletesFromCompetitionDetails(byId);
+    Logger.log('Athlètes ajoutés depuis les compétitions R2 : %s', fromCompetitions);
+  }
+
   var athletes = [];
   for (var id in byId) athletes.push(byId[id]);
   athletes.sort(function (a, b) {
@@ -766,6 +772,7 @@ function athleGetClubYouthAthletes(options) {
   return {
     _stats: {
       performanceRows: performanceRows,
+      fromCompetitions: fromCompetitions,
       enrichedProfiles: enriched,
       enrichErrors: enrichErrors,
       seasonYear: year,
@@ -773,6 +780,54 @@ function athleGetClubYouthAthletes(options) {
     },
     athletes: athletes,
   };
+}
+
+/**
+ * Complète la base avec les athlètes présents dans les JSON compétition R2
+ * (ex. U14 absents des bilans mais présents en meeting).
+ */
+function athleMergeAthletesFromCompetitionDetails(byId) {
+  var keys = r2ListObjectKeys();
+  var added = 0;
+  for (var i = 0; i < keys.length; i++) {
+    var name = athleR2RelativeName(keys[i]);
+    if (!/^\d{4}-\d{2}-\d{2}_.+\.json$/i.test(name)) continue;
+    if (name.indexOf('_ERROR_') !== -1) continue;
+    var detail = null;
+    try {
+      detail = r2DownloadJsonByObjectKey(keys[i]);
+    } catch (err) {
+      Logger.log('  skip détail %s : %s', name, err.message || err);
+      continue;
+    }
+    if (!detail || !detail.epreuves) continue;
+    for (var e = 0; e < detail.epreuves.length; e++) {
+      var parts = detail.epreuves[e].participants || [];
+      for (var p = 0; p < parts.length; p++) {
+        var part = parts[p];
+        var athleteId = part.athleteId ? String(part.athleteId) : '';
+        if (!athleteId) continue;
+        var parsedCat = athleParseBilansAthleteCategory(part.category || '');
+        if (byId[athleteId]) {
+          if (!byId[athleteId].name && part.athleteName) byId[athleteId].name = part.athleteName;
+          if (!byId[athleteId].categoryCode && parsedCat.code) {
+            byId[athleteId].categoryCode = parsedCat.code;
+            byId[athleteId].youthCategory = parsedCat.youthCategory;
+          }
+          continue;
+        }
+        byId[athleteId] = {
+          athleteId: athleteId,
+          name: part.athleteName || athleteId,
+          categoryCode: parsedCat.code,
+          youthCategory: parsedCat.youthCategory,
+          events: [],
+        };
+        added += 1;
+      }
+    }
+  }
+  return added;
 }
 
 function athleBuildAthleteProfileUrl(athleteId) {

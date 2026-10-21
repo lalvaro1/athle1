@@ -261,17 +261,20 @@ function runAthleSyncAthletes() {
   var result = athleGetClubYouthAthletes();
   var stats = result._stats || {};
   var payload = { athletes: result.athletes || [] };
-  r2UploadJson(ATHLETES_FILE, payload);
+  // Compact JSON (sans indentation) pour limiter la taille sur R2.
+  r2PutObject(ATHLETES_FILE, 'application/json; charset=utf-8', JSON.stringify(payload));
   var objectKey = r2ObjectKey(ATHLETES_FILE);
   Logger.log(
-    'Athlètes sync OK — %s athlète(s), %s fiche(s) enrichie(s), %s erreur(s) → %s',
+    'Athlètes sync OK — %s athlète(s) (dont +%s compétitions), %s fiche(s), %s erreur(s) → %s',
     stats.count || payload.athletes.length,
+    stats.fromCompetitions || 0,
     stats.enrichedProfiles || 0,
     stats.enrichErrors || 0,
     objectKey,
   );
   return {
     count: stats.count || payload.athletes.length,
+    fromCompetitions: stats.fromCompetitions || 0,
     performanceRows: stats.performanceRows || 0,
     enrichedProfiles: stats.enrichedProfiles || 0,
     enrichErrors: stats.enrichErrors || 0,
