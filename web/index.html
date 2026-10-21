@@ -69,6 +69,22 @@
       </footer>
     </div>
 
+    <dialog id="athlete-dialog" class="athlete-dialog" aria-labelledby="athlete-dialog-title">
+      <form method="dialog" class="athlete-dialog__panel">
+        <header class="athlete-dialog__head">
+          <div>
+            <p class="eyebrow">Athlète</p>
+            <h2 id="athlete-dialog-title"></h2>
+            <p id="athlete-dialog-meta" class="place"></p>
+          </div>
+          <button type="submit" class="athlete-dialog__close" value="close" aria-label="Fermer">
+            ×
+          </button>
+        </header>
+        <div id="athlete-dialog-body" class="athlete-dialog__body"></div>
+      </form>
+    </dialog>
+
     <script src="app.js" type="module"></script>
   </body>
 </html>

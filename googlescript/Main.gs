@@ -6,12 +6,15 @@
  * 2. runAthleSyncForToday() — sync du jour
  * 3. getAllDataForMonth(10, 2026) — backfill manuel mois par mois
  * 4. rebuildCompetitionsIndexFromBucket() — reconstruit competitions.json depuis R2
- * 5. installHourlyTrigger() une fois
+ * 5. runAthleSyncAthletes() — base athlètes U14/U16 (bilans club) → athletes.json
+ * 6. installHourlyTrigger() une fois
  *
  * Index agrégé : data/competitions.json (append des nouvelles compétitions).
+ * Athlètes : data/athletes.json
  */
 
 var COMPETITIONS_INDEX_FILE = 'competitions.json';
+var ATHLETES_FILE = 'athletes.json';
 
 /**
  * Parcourt les JSON détail déjà présents dans R2 (fichiers data/YYYY-MM-DD_….json)
@@ -240,6 +243,41 @@ function getAllDataForMonth(month, year) {
 /** Raccourci éditeur : changez mois/année puis Exécuter. */
 function runGetAllDataForMonth() {
   return getAllDataForMonth(10, 2026);
+}
+
+/**
+ * Récupère la base athlètes U14/U16 du club via les bilans FFA
+ * (catégories BE + MI) et écrit data/athletes.json sur R2.
+ */
+function runAthleSyncAthletes() {
+  r2GetConfig();
+  Logger.log(
+    'Sync athlètes bilans — club %s (%s), année %s',
+    ATHLE_CONFIG.CLUB_NAME,
+    ATHLE_CONFIG.CLUB_ID,
+    ATHLE_CONFIG.BILANS_YEAR || athleBilansYear(),
+  );
+
+  var result = athleGetClubYouthAthletes();
+  var stats = result._stats || {};
+  var payload = { athletes: result.athletes || [] };
+  r2UploadJson(ATHLETES_FILE, payload);
+  var objectKey = r2ObjectKey(ATHLETES_FILE);
+  Logger.log(
+    'Athlètes sync OK — %s athlète(s), %s fiche(s) enrichie(s), %s erreur(s) → %s',
+    stats.count || payload.athletes.length,
+    stats.enrichedProfiles || 0,
+    stats.enrichErrors || 0,
+    objectKey,
+  );
+  return {
+    count: stats.count || payload.athletes.length,
+    performanceRows: stats.performanceRows || 0,
+    enrichedProfiles: stats.enrichedProfiles || 0,
+    enrichErrors: stats.enrichErrors || 0,
+    seasonYear: stats.seasonYear,
+    objectKey: objectKey,
+  };
 }
 
 /**

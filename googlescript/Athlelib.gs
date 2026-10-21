@@ -521,3 +521,433 @@ function athleMaybeSleep() {
     Utilities.sleep(ATHLE_CONFIG.PAUSE_MS);
   }
 }
+
+/**
+ * Bilans club (performances) — source pour la liste des athlètes.
+ * Ex. frmbase=bilans&frmclub=033011&frmligue=N-A&frmdepartement=033&frmcategorie=BE&frmannee=2026&frmpostback=true
+ */
+function athleBuildBilansUrl(params) {
+  params = params || {};
+  var q = [
+    'frmbase=bilans',
+    'frmmode=1',
+    'frmespace=0',
+    'frmpostback=true',
+    'frmligue=' + encodeURIComponent(String(params.ligue || '')),
+    'frmdepartement=' + encodeURIComponent(String(params.department || '')),
+    'frmclub=' + encodeURIComponent(String(params.clubId || '')),
+    'frmannee=' + encodeURIComponent(String(params.year || '')),
+    'frmcategorie=' + encodeURIComponent(String(params.category || '')),
+    'frmsexe=' + encodeURIComponent(String(params.sex || '')),
+    'frmepreuve=' + encodeURIComponent(String(params.epreuve || '')),
+  ];
+  if (params.position != null && params.position !== '') {
+    q.push('frmposition=' + encodeURIComponent(String(params.position)));
+  }
+  return ATHLE_SITE + '/bases/liste.aspx?' + q.join('&');
+}
+
+function athleBilansYear() {
+  if (typeof ATHLE_CONFIG !== 'undefined' && ATHLE_CONFIG.BILANS_YEAR) {
+    return Number(ATHLE_CONFIG.BILANS_YEAR);
+  }
+  var tz =
+    typeof ATHLE_CONFIG !== 'undefined' && ATHLE_CONFIG.TIMEZONE
+      ? ATHLE_CONFIG.TIMEZONE
+      : 'Europe/Paris';
+  return Number(Utilities.formatDate(new Date(), tz, 'yyyy'));
+}
+
+/**
+ * Mappe un code bilan FFA (BE/MI/…) vers U14/U16.
+ * @return {'U14'|'U16'|null}
+ */
+function athleYouthCategoryFromBilansCode(code) {
+  var c = String(code || '')
+    .toUpperCase()
+    .replace(/[^A-Z]/g, '');
+  if (c.indexOf('BE') === 0) return 'U14';
+  if (c.indexOf('MI') === 0) return 'U16';
+  return null;
+}
+
+/**
+ * Parse "BEF/ 14" → code, sexe, année de naissance estimée, U14/U16.
+ */
+function athleParseBilansAthleteCategory(raw) {
+  var text = String(raw || '').trim();
+  var match = text.match(/^([A-Za-z]{2,4})\s*\/\s*(\d{2})\s*$/);
+  var code = match ? match[1].toUpperCase() : text.split('/')[0].trim().toUpperCase();
+  var yearSuffix = match ? Number(match[2]) : null;
+  var birthYear = yearSuffix == null ? null : yearSuffix >= 30 ? 1900 + yearSuffix : 2000 + yearSuffix;
+  var sex = null;
+  if (/F$/i.test(code)) sex = 'F';
+  else if (/M$/i.test(code)) sex = 'M';
+  return {
+    raw: text,
+    code: code || null,
+    sex: sex,
+    birthYear: birthYear,
+    youthCategory: athleYouthCategoryFromBilansCode(code),
+  };
+}
+
+function athleParseBilansListHtml(html) {
+  var rows = [];
+  var trRe = /<tr class="(?!detail-row)[^"]*">([\s\S]*?)<\/tr>/gi;
+  var trMatch;
+  while ((trMatch = trRe.exec(html)) !== null) {
+    var chunk = trMatch[1];
+    var athleteMatch = chunk.match(/\/athletes\/(\d+)/i);
+    if (!athleteMatch) continue;
+    var tds = [];
+    var tdRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+    var tdMatch;
+    while ((tdMatch = tdRe.exec(chunk)) !== null) {
+      tds.push(athleStripHtml(tdMatch[1]));
+    }
+    // Place | Performance | Nom | Club | Ligue | Dep. | Infos | Date | Lieu
+    if (tds.length < 8) continue;
+    rows.push({
+      athleteId: athleteMatch[1],
+      performance: tds[1] || null,
+      name: tds[2] || null,
+      clubName: tds[3] || null,
+      ligue: tds[4] || null,
+      department: tds[5] || null,
+      category: tds[6] || null,
+      date: tds[7] || null,
+      place: tds[8] || null,
+    });
+  }
+  var totalMatch = html.match(/(\d+)\s+r[ée]sultats?/i);
+  var positions = [];
+  var posRe = /frmposition=(\d+)/gi;
+  var posMatch;
+  while ((posMatch = posRe.exec(html)) !== null) {
+    var n = Number(posMatch[1]);
+    if (positions.indexOf(n) === -1) positions.push(n);
+  }
+  positions.sort(function (a, b) {
+    return a - b;
+  });
+  return {
+    rows: rows,
+    total: totalMatch ? Number(totalMatch[1]) : rows.length,
+    positions: positions,
+  };
+}
+
+/**
+ * Parcourt les pages de bilans pour une catégorie (BE, MI, …).
+ */
+function athleFetchBilansRowsForCategory(club, year, category) {
+  var all = [];
+  var position = 0;
+  var seen = {};
+  var guard = 0;
+  while (!seen[position] && guard < 50) {
+    seen[position] = true;
+    guard += 1;
+    var url = athleBuildBilansUrl({
+      clubId: club.id,
+      ligue: club.ligue,
+      department: club.department,
+      year: year,
+      category: category,
+      position: position,
+    });
+    if (guard > 1) athleMaybeSleep();
+    var parsed = athleParseBilansListHtml(athleFetchHtml(url));
+    for (var i = 0; i < parsed.rows.length; i++) {
+      all.push(parsed.rows[i]);
+    }
+    var next = null;
+    for (var p = 0; p < parsed.positions.length; p++) {
+      if (parsed.positions[p] > position) {
+        next = parsed.positions[p];
+        break;
+      }
+    }
+    if (next == null) break;
+    position = next;
+  }
+  return all;
+}
+
+/**
+ * Base athlètes U14/U16 du club via les bilans FFA (dédupliqués par athleteId).
+ */
+function athleGetClubYouthAthletes(options) {
+  options = options || {};
+  var club = {
+    id: String(options.clubId || ATHLE_CONFIG.CLUB_ID || ''),
+    name: String(options.clubName || ATHLE_CONFIG.CLUB_NAME || ''),
+    ligue: String(options.ligue || ATHLE_CONFIG.CLUB_LIGUE || ''),
+    department: String(options.department || ATHLE_CONFIG.CLUB_DEPARTEMENT || ''),
+  };
+  if (!club.id) throw new Error('CLUB_ID manquant pour les bilans athlètes');
+
+  var year = options.year != null ? Number(options.year) : athleBilansYear();
+  var bilansCategories =
+    options.bilansCategories || ATHLE_CONFIG.BILANS_YOUTH_CATEGORIES || ['BE', 'MI'];
+
+  var byId = {};
+  var performanceRows = 0;
+
+  for (var c = 0; c < bilansCategories.length; c++) {
+    var cat = bilansCategories[c];
+    Logger.log(
+      'Bilans %s — %s',
+      cat,
+      athleBuildBilansUrl({
+        clubId: club.id,
+        ligue: club.ligue,
+        department: club.department,
+        year: year,
+        category: cat,
+        position: 0,
+      }),
+    );
+    var rows = athleFetchBilansRowsForCategory(club, year, cat);
+    performanceRows += rows.length;
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      if (!row.athleteId) continue;
+      var parsedCat = athleParseBilansAthleteCategory(row.category);
+      var current = byId[row.athleteId];
+      if (!current) {
+        byId[row.athleteId] = {
+          athleteId: row.athleteId,
+          name: row.name,
+          categoryCode: parsedCat.code,
+          youthCategory: parsedCat.youthCategory,
+          events: [],
+        };
+      } else {
+        if (!current.name && row.name) current.name = row.name;
+        if (parsedCat.code) current.categoryCode = parsedCat.code;
+        if (parsedCat.youthCategory) current.youthCategory = parsedCat.youthCategory;
+      }
+    }
+  }
+
+  var athletes = [];
+  for (var id in byId) athletes.push(byId[id]);
+  athletes.sort(function (a, b) {
+    return String(a.name || '').localeCompare(String(b.name || ''), 'fr');
+  });
+
+  var enrich =
+    options.enrichProfiles != null
+      ? !!options.enrichProfiles
+      : !!(typeof ATHLE_CONFIG !== 'undefined' && ATHLE_CONFIG.ENRICH_ATHLETE_PROFILES);
+  var enriched = 0;
+  var enrichErrors = 0;
+  if (enrich) {
+    Logger.log('Enrichissement fiches athlètes (%s) pour PB/SB…', athletes.length);
+    for (var a = 0; a < athletes.length; a++) {
+      try {
+        athleMaybeSleep();
+        athleEnrichAthleteFromProfile(athletes[a]);
+        enriched += 1;
+      } catch (err) {
+        enrichErrors += 1;
+        Logger.log(
+          '  ERREUR fiche %s (%s) : %s',
+          athletes[a].athleteId,
+          athletes[a].name,
+          err.message || err,
+        );
+      }
+    }
+  }
+
+  return {
+    _stats: {
+      performanceRows: performanceRows,
+      enrichedProfiles: enriched,
+      enrichErrors: enrichErrors,
+      seasonYear: year,
+      count: athletes.length,
+    },
+    athletes: athletes,
+  };
+}
+
+function athleBuildAthleteProfileUrl(athleteId) {
+  return ATHLE_SITE + '/athletes/' + encodeURIComponent(String(athleteId));
+}
+
+/**
+ * Enrichit un athlète avec les PB/SB depuis sa fiche profil.
+ */
+function athleEnrichAthleteFromProfile(athlete) {
+  var html = athleFetchHtml(athleBuildAthleteProfileUrl(athlete.athleteId));
+  var identity = athleParseAthleteProfileIdentity(html);
+  if (identity.categoryCode) {
+    if (!athlete.categoryCode) athlete.categoryCode = identity.categoryCode;
+    if (!athlete.youthCategory) {
+      athlete.youthCategory = athleYouthCategoryFromBilansCode(identity.categoryCode);
+    }
+  }
+  athlete.events = athleParseAthleteSeasonBests(html);
+  return athlete;
+}
+
+function athleParseAthleteProfileIdentity(html) {
+  var birth = html.match(/Né\(e\)\s*en\s*:\s*<\/span>\s*(\d{4})/i);
+  var club = html.match(/Club\s*:\s*<\/span>\s*([^<]+)/i);
+  var licence = html.match(/N°\s*de\s*licence[^:]*:\s*<\/span>\s*([^<]+)/i);
+  var cat = html.match(
+    /Catégorie\s*\/\s*Nationalité\s*:\s*<\/span>\s*([A-Za-z]{1,4})\s*(?:<span[^>]*>\s*\/\s*<\/span>\s*([A-Za-z]))?/i,
+  );
+  var sex = cat && cat[2] ? String(cat[2]).toUpperCase() : null;
+  return {
+    birthYear: birth ? Number(birth[1]) : null,
+    clubName: club ? athleStripHtml(club[1]) : null,
+    licence: licence ? athleStripHtml(licence[1]) : null,
+    categoryCode: cat ? String(cat[1]).toUpperCase() : null,
+    sex: sex === 'F' || sex === 'M' ? sex : null,
+  };
+}
+
+/** Nettoie une marque : retire vent / mentions entre parenthèses. */
+function athleCompactMark(perf) {
+  return String(perf || '')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Section « Meilleures performances par saison » de la fiche athlète.
+ * @return {Array<{event:string, pb:string, sb:string}>}
+ */
+function athleParseAthleteSeasonBests(html) {
+  var marker = 'Meilleures performances par saison';
+  var start = html.indexOf(marker);
+  if (start === -1) return [];
+  var rest = html.substring(start);
+  var endMatch = rest.substring(marker.length).match(/<h3\b/i);
+  var section = endMatch ? rest.substring(0, marker.length + endMatch.index) : rest.substring(0, 40000);
+
+  var parts = section.split(/<div class="headers text-normal mb-10">/i);
+  var events = [];
+  for (var i = 1; i < parts.length; i++) {
+    var part = parts[i];
+    var nameMatch = part.match(/^([^<]+)<\/div>/i);
+    if (!nameMatch) continue;
+    var eventName = athleStripHtml(nameMatch[1]);
+    if (!eventName) continue;
+    var body = part.substring(nameMatch[0].length);
+    var bySeason = [];
+    var trRe = /<tr(?![^>]*detail-row)[^>]*>([\s\S]*?)<\/tr>/gi;
+    var trMatch;
+    while ((trMatch = trRe.exec(body)) !== null) {
+      var chunk = trMatch[1];
+      if (/<th\b/i.test(chunk)) continue;
+      if (/no-border-no-padding/i.test(trMatch[0])) continue;
+      var tds = [];
+      var tdRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+      var tdMatch;
+      while ((tdMatch = tdRe.exec(chunk)) !== null) {
+        tds.push(tdMatch[1]);
+      }
+      if (tds.length < 3) continue;
+      var season = athleStripHtml(tds[0]);
+      if (!/^\d{4}$/.test(season)) continue;
+      var perfHtml = tds[2];
+      bySeason.push({
+        season: season,
+        date: athleStripHtml(tds[1]),
+        performance: athleStripHtml(perfHtml),
+        club: tds[3] ? athleStripHtml(tds[3]) : null,
+        place: tds[5] ? athleStripHtml(tds[5]) : null,
+        highlighted: /<b\b/i.test(perfHtml),
+      });
+    }
+    if (!bySeason.length) continue;
+    events.push(athleBuildEventBests(eventName, bySeason));
+  }
+  return events;
+}
+
+function athleBuildEventBests(eventName, bySeason) {
+  var pb = null;
+  var sb = null;
+  var latestSeason = null;
+  var highlighted = null;
+  for (var i = 0; i < bySeason.length; i++) {
+    var row = bySeason[i];
+    if (latestSeason == null || Number(row.season) > Number(latestSeason)) {
+      latestSeason = row.season;
+      sb = row;
+    }
+    if (row.highlighted && !highlighted) highlighted = row;
+    if (!pb || athleIsBetterPerformance(row.performance, pb.performance, eventName)) {
+      pb = row;
+    }
+  }
+  if (highlighted) pb = highlighted;
+  var out = { event: eventName };
+  if (pb && pb.performance) out.pb = athleCompactMark(pb.performance);
+  if (sb && sb.performance) out.sb = athleCompactMark(sb.performance);
+  return out;
+}
+
+/**
+ * true si perfA est meilleure que perfB pour l’épreuve.
+ */
+function athleIsBetterPerformance(perfA, perfB, eventName) {
+  var a = athlePerformanceMetric(perfA, eventName);
+  var b = athlePerformanceMetric(perfB, eventName);
+  if (a.value == null || b.value == null) return false;
+  return a.lowerIsBetter ? a.value < b.value : a.value > b.value;
+}
+
+/**
+ * Convertit une perf texte en valeur comparable.
+ * @return {{value:number|null, lowerIsBetter:boolean}}
+ */
+function athlePerformanceMetric(perf, eventName) {
+  var raw = String(perf || '');
+  var cleaned = raw
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/,/g, '.')
+    .replace(/\s+/g, ' ')
+    .trim();
+  var event = String(eventName || '').toLowerCase();
+
+  var pts = cleaned.match(/(\d+(?:\.\d+)?)\s*pts/i);
+  if (pts || /triathlon|pentathlon|heptathlon|décathlon|points/i.test(event)) {
+    var pv = pts ? Number(pts[1]) : Number((cleaned.match(/(\d+(?:\.\d+)?)/) || [])[1]);
+    return { value: isNaN(pv) ? null : pv, lowerIsBetter: false };
+  }
+
+  // Distance / hauteur : 3m98, 13m17, 1m02
+  var dist = cleaned.match(/(\d+)\s*m\s*(\d+)/i);
+  if (dist) {
+    var decimals = dist[2].length;
+    var meters = Number(dist[1]) + Number(dist[2]) / Math.pow(10, decimals);
+    return { value: meters, lowerIsBetter: false };
+  }
+
+  // Temps : 3'58''04 | 9''39 | 1°02'' | 58''04
+  var time = cleaned.match(/(?:(\d+)['’°])?(\d+)[''″"]{1,2}(\d+)?/);
+  if (time) {
+    var min = time[1] ? Number(time[1]) : 0;
+    var sec = Number(time[2]);
+    var hun = time[3] ? Number(time[3]) / Math.pow(10, time[3].length) : 0;
+    return { value: min * 60 + sec + hun, lowerIsBetter: true };
+  }
+
+  var plain = cleaned.match(/(\d+(?:\.\d+)?)/);
+  if (plain) {
+    var lower =
+      /m\b|haies|steeple|marche|course|relais|\/|sprint/i.test(event) &&
+      !/hauteur|longueur|triple|poids|disque|javelot|marteau|perche/i.test(event);
+    return { value: Number(plain[1]), lowerIsBetter: lower };
+  }
+  return { value: null, lowerIsBetter: true };
+}
