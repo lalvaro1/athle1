@@ -555,14 +555,44 @@ function renderSchedule(schedule) {
   scheduleEl.replaceChildren(fragment);
 }
 
+/** athle.fr tronque souvent le libellé en tableau ; l’id d’épreuve est plus complet. */
+function resolveEpreuveDisplayName(epreuve) {
+  const candidates = [
+    epreuve?.id,
+    epreuve?.name,
+    ...(epreuve?.participants || []).map((p) => p?.epreuveName),
+  ]
+    .filter(Boolean)
+    .map((value) => String(value).trim())
+    .filter(Boolean);
+
+  let best = candidates[0] || "Épreuve";
+  for (const candidate of candidates) {
+    if (scoreEpreuveName(candidate) > scoreEpreuveName(best)) best = candidate;
+  }
+  // Sur mobile surtout : on retire "/ MIF", "/ BEF", etc. pour gagner de la place.
+  return best.replace(/\s*\/\s*[A-Za-z]{2,4}\s*$/, "").replace(/\s*\/\s*$/, "").trim() || best;
+}
+
+function scoreEpreuveName(name) {
+  const text = String(name || "");
+  let score = text.length;
+  if (/\([^)]*$/.test(text)) score -= 80; // parenthèse non fermée → tronqué
+  if (/\s\/\s*$/.test(text)) score -= 40; // slash final sans catégorie
+  if (/\s\/\s*[A-Za-z]{2,4}\b/.test(text)) score += 40;
+  if (/\)\s*\/\s*[A-Za-z]/.test(text)) score += 20;
+  return score;
+}
+
 function buildSchedule(epreuves) {
   const groups = new Map();
   for (const epreuve of epreuves || []) {
+    const eventName = resolveEpreuveDisplayName(epreuve);
     for (const participant of epreuve.participants || []) {
       const time = String(participant.horaire || epreuve.horaire || "—").split(",")[0].trim() || "—";
-      const key = `${time}@@${epreuve.name}`;
+      const key = `${time}@@${eventName}`;
       if (!groups.has(key)) {
-        groups.set(key, { time, eventName: epreuve.name, athletes: [] });
+        groups.set(key, { time, eventName, athletes: [] });
       }
       groups.get(key).athletes.push({
         id: participant.athleteId ? String(participant.athleteId) : null,

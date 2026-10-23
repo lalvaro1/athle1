@@ -424,15 +424,42 @@ function athleLookupSeriesTime(schedule, series) {
 }
 
 function athleMatchEpreuveId(epreuveName, options) {
+  var matched = athleMatchEpreuveOption(epreuveName, options);
+  return matched ? matched.id : null;
+}
+
+/** Retourne l’option épreuve (id + name complet) ; le tableau club tronque souvent le libellé. */
+function athleMatchEpreuveOption(epreuveName, options) {
   var target = athleNormalizeEpreuveName(epreuveName);
+  if (!target) return null;
   for (var i = 0; i < options.length; i++) {
-    if (athleNormalizeEpreuveName(options[i].name) === target) return options[i].id;
+    if (athleNormalizeEpreuveName(options[i].name) === target) return options[i];
   }
   for (var j = 0; j < options.length; j++) {
     var n = athleNormalizeEpreuveName(options[j].name);
-    if (n.indexOf(target) !== -1 || target.indexOf(n) !== -1) return options[j].id;
+    if (n.indexOf(target) !== -1 || target.indexOf(n) !== -1) return options[j];
   }
   return null;
+}
+
+/** Préfère le libellé complet (option / id) au texte tronqué du tableau club. */
+function athlePreferEpreuveDisplayName(candidates) {
+  var best = '';
+  var bestScore = -1e9;
+  for (var i = 0; i < (candidates || []).length; i++) {
+    var text = String(candidates[i] || '').replace(/\s+/g, ' ').trim();
+    if (!text) continue;
+    var score = text.length;
+    if (/\([^)]*$/.test(text)) score -= 80;
+    if (/\s\/\s*$/.test(text)) score -= 40;
+    if (/\s\/\s*[A-Za-z]{2,4}\b/.test(text)) score += 40;
+    if (/\)\s*\/\s*[A-Za-z]/.test(text)) score += 20;
+    if (score > bestScore) {
+      bestScore = score;
+      best = text;
+    }
+  }
+  return best.replace(/\s*\/\s*$/, '').trim() || best;
 }
 
 /**
@@ -462,18 +489,28 @@ function athleGetClubEpreuvesInCompetition(competitionId, clubNameOrId, knownClu
   var byEpreuve = {};
   for (var r = 0; r < participantRows.length; r++) {
     var row = participantRows[r];
-    var key = athleNormalizeEpreuveName(row.epreuveName);
+    var matched = athleMatchEpreuveOption(row.epreuveName, epreuveOptions);
+    var displayName = athlePreferEpreuveDisplayName([
+      matched && matched.name,
+      matched && matched.id,
+      row.epreuveName,
+    ]);
+    var key = athleNormalizeEpreuveName(displayName || row.epreuveName);
     if (!byEpreuve[key]) {
       byEpreuve[key] = {
-        id: athleMatchEpreuveId(row.epreuveName, epreuveOptions),
-        name: row.epreuveName,
+        id: matched ? matched.id : null,
+        name: displayName || row.epreuveName,
         horaire: null,
         seriesSchedule: {},
         participants: [],
       };
+    } else if (displayName && displayName.length > String(byEpreuve[key].name || '').length) {
+      byEpreuve[key].name = displayName;
+      if (matched && matched.id) byEpreuve[key].id = matched.id;
     }
     var copy = {};
     for (var pk in row) copy[pk] = row[pk];
+    copy.epreuveName = displayName || row.epreuveName;
     copy.horaire = null;
     byEpreuve[key].participants.push(copy);
   }
