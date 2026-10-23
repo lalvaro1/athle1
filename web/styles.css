@@ -137,6 +137,61 @@ main {
   gap: 1rem;
 }
 
+.tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+  padding: 0.3rem;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(64, 80, 255, 0.1);
+  box-shadow: 0 10px 24px rgba(42, 54, 214, 0.08);
+}
+
+.tabs__btn {
+  appearance: none;
+  border: 0;
+  border-radius: 12px;
+  padding: 0.75rem 0.9rem;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.tabs__btn:hover {
+  color: var(--ink);
+  background: rgba(64, 80, 255, 0.06);
+}
+
+.tabs__btn.is-active {
+  color: #fff;
+  background: linear-gradient(115deg, var(--cab-blue-deep), var(--cab-blue) 55%, #5a6bff);
+  box-shadow: 0 8px 18px rgba(42, 54, 214, 0.22);
+}
+
+.tabs__btn:focus-visible {
+  outline: 2px solid rgba(64, 80, 255, 0.35);
+  outline-offset: 2px;
+}
+
+.tab-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.tab-panel[hidden] {
+  display: none;
+}
+
+.athlete-panel__body {
+  display: grid;
+  gap: 0.75rem;
+}
+
 .picker-block {
   display: grid;
   gap: 0.65rem;

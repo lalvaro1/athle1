@@ -8,15 +8,29 @@ const planningTitleEl = document.querySelector("#planning-title");
 const planningMetaEl = document.querySelector("#planning-meta");
 const planningPlaceEl = document.querySelector("#planning-place");
 const scheduleEl = document.querySelector("#schedule");
+const athleteSelect = document.querySelector("#athlete-select");
+const athleteStatusEl = document.querySelector("#athlete-status");
+const athletePanelEl = document.querySelector("#athlete-panel");
+const athletePanelTitleEl = document.querySelector("#athlete-panel-title");
+const athletePanelMetaEl = document.querySelector("#athlete-panel-meta");
+const athletePanelCountEl = document.querySelector("#athlete-panel-count");
+const athletePanelBodyEl = document.querySelector("#athlete-panel-body");
 const athleteDialog = document.querySelector("#athlete-dialog");
 const athleteDialogTitle = document.querySelector("#athlete-dialog-title");
 const athleteDialogMeta = document.querySelector("#athlete-dialog-meta");
 const athleteDialogBody = document.querySelector("#athlete-dialog-body");
+const tabButtons = [...document.querySelectorAll(".tabs__btn")];
+const tabCompetitions = document.querySelector("#tab-competitions");
+const tabAthletes = document.querySelector("#tab-athletes");
 
 const params = new URLSearchParams(location.search);
+let activeTab = params.get("tab") === "athletes" ? "athletes" : "competitions";
 let selectedId = params.get("competition");
+let selectedAthleteId = params.get("athlete");
 /** @type {Array<Record<string, any>>} */
 let competitions = [];
+/** @type {Array<Record<string, any>>} */
+let athletesList = [];
 /** @type {Map<string, Record<string, any>>} */
 const athletesById = new Map();
 /** @type {Map<string, Record<string, any>>} */
@@ -28,6 +42,21 @@ competitionSelect.addEventListener("change", () => {
   const chosen = competitions.find((comp) => String(comp.resultsId) === String(selectedId));
   if (chosen) loadCompetition(chosen);
 });
+
+athleteSelect.addEventListener("change", () => {
+  selectedAthleteId = athleteSelect.value || null;
+  syncUrl();
+  const chosen = athletesById.get(String(selectedAthleteId));
+  if (chosen) showAthletePanel(chosen);
+  else {
+    athletePanelEl.hidden = true;
+    athletePanelBodyEl.replaceChildren();
+  }
+});
+
+for (const button of tabButtons) {
+  button.addEventListener("click", () => setActiveTab(button.dataset.tab || "competitions"));
+}
 
 scheduleEl.addEventListener("click", (event) => {
   const target = event.target.closest("[data-athlete-key]");
@@ -43,8 +72,11 @@ boot();
 
 async function boot() {
   statusEl.textContent = "Chargement…";
+  athleteStatusEl.textContent = "Chargement…";
   planningEl.hidden = true;
+  athletePanelEl.hidden = true;
   scheduleEl.replaceChildren();
+  setActiveTab(activeTab, { skipUrl: true });
 
   try {
     const [competitionsPayload] = await Promise.all([
@@ -52,32 +84,58 @@ async function boot() {
       loadAthletesIndex(),
     ]);
 
+    fillAthleteSelect(athletesList);
+
     competitions = sortCompetitionsNewestFirst(competitionsPayload.competitions || []);
     if (!competitions.length) {
       competitionSelect.replaceChildren(new Option("Aucune compétition", ""));
       competitionSelect.disabled = true;
       statusEl.textContent = "0 compétition";
-      return;
+    } else {
+      fillCompetitionSelect(competitions);
+      const chosen =
+        competitions.find((comp) => String(comp.resultsId) === String(selectedId)) ||
+        competitions[0];
+      selectedId = String(chosen.resultsId);
+      competitionSelect.value = selectedId;
+      competitionSelect.disabled = false;
+      statusEl.textContent =
+        competitions.length === 1 ? "1 compétition" : `${competitions.length} compétitions`;
+      await loadCompetition(chosen);
     }
 
-    fillCompetitionSelect(competitions);
+    if (selectedAthleteId && athletesById.has(String(selectedAthleteId))) {
+      athleteSelect.value = String(selectedAthleteId);
+      showAthletePanel(athletesById.get(String(selectedAthleteId)));
+    } else if (athletesList.length) {
+      selectedAthleteId = String(athletesList[0].athleteId);
+      athleteSelect.value = selectedAthleteId;
+      showAthletePanel(athletesList[0]);
+    }
 
-    const chosen =
-      competitions.find((comp) => String(comp.resultsId) === String(selectedId)) ||
-      competitions[0];
-    selectedId = String(chosen.resultsId);
-    competitionSelect.value = selectedId;
-    competitionSelect.disabled = false;
-    statusEl.textContent =
-      competitions.length === 1 ? "1 compétition" : `${competitions.length} compétitions`;
     syncUrl();
-    await loadCompetition(chosen);
   } catch (error) {
     competitionSelect.replaceChildren(new Option("Chargement impossible", ""));
     competitionSelect.disabled = true;
     statusEl.textContent = "Chargement impossible";
+    athleteSelect.replaceChildren(new Option("Chargement impossible", ""));
+    athleteSelect.disabled = true;
+    athleteStatusEl.textContent = "Chargement impossible";
     console.error(error);
   }
+}
+
+function setActiveTab(tab, { skipUrl = false } = {}) {
+  activeTab = tab === "athletes" ? "athletes" : "competitions";
+  const showAthletes = activeTab === "athletes";
+  tabCompetitions.hidden = showAthletes;
+  tabAthletes.hidden = !showAthletes;
+  for (const button of tabButtons) {
+    const on = button.dataset.tab === activeTab;
+    button.classList.toggle("is-active", on);
+    button.setAttribute("aria-selected", on ? "true" : "false");
+  }
+  if (!skipUrl) syncUrl();
 }
 
 async function fetchJson(objectKey, fallback = null) {
@@ -90,6 +148,7 @@ async function fetchJson(objectKey, fallback = null) {
 async function loadAthletesIndex() {
   athletesById.clear();
   athletesByNameKey.clear();
+  athletesList = [];
   try {
     const url = dataUrl("athletes.json");
     const payload = await fetchJson("athletes.json", { athletes: [] });
@@ -98,10 +157,61 @@ async function loadAthletesIndex() {
       athletesById.set(String(athlete.athleteId), athlete);
       const key = athleteNameKey(athlete.name);
       if (key) athletesByNameKey.set(key, athlete);
+      athletesList.push(athlete);
     }
+    athletesList.sort((a, b) =>
+      formatAthleteName(a.name).localeCompare(formatAthleteName(b.name), "fr"),
+    );
     console.info(`athletes.json OK (${athletesById.size}) ← ${url}`);
   } catch (error) {
     console.warn("athletes.json indisponible", error);
+  }
+}
+
+function fillAthleteSelect(list) {
+  if (!list.length) {
+    athleteSelect.replaceChildren(new Option("Aucun athlète", ""));
+    athleteSelect.disabled = true;
+    athleteStatusEl.textContent = "0 athlète";
+    return;
+  }
+  const fragment = document.createDocumentFragment();
+  for (const athlete of list) {
+    const label = [
+      formatAthleteName(athlete.name),
+      athlete.youthCategory,
+      athlete.categoryCode,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    fragment.append(new Option(label, String(athlete.athleteId)));
+  }
+  athleteSelect.replaceChildren(fragment);
+  athleteSelect.disabled = false;
+  athleteStatusEl.textContent = list.length === 1 ? "1 athlète" : `${list.length} athlètes`;
+}
+
+function showAthletePanel(athlete) {
+  athletePanelEl.hidden = false;
+  athletePanelTitleEl.textContent = formatAthleteName(athlete.name);
+  athletePanelMetaEl.textContent = [athlete.youthCategory, athlete.categoryCode]
+    .filter(Boolean)
+    .join(" · ");
+  const events = athlete.events || [];
+  athletePanelCountEl.textContent =
+    events.length === 1 ? "1 épreuve" : `${events.length} épreuves`;
+  athletePanelBodyEl.replaceChildren();
+  if (!events.length) {
+    athletePanelBodyEl.append(
+      Object.assign(document.createElement("p"), {
+        className: "empty",
+        textContent: "Pas encore d’infos détaillées pour cet athlète.",
+      }),
+    );
+    return;
+  }
+  for (const entry of events) {
+    athletePanelBodyEl.append(renderAthleteEventCard(entry, false));
   }
 }
 
@@ -528,7 +638,9 @@ function dataUrl(objectKey) {
 
 function syncUrl() {
   const next = new URLSearchParams();
+  if (activeTab === "athletes") next.set("tab", "athletes");
   if (selectedId) next.set("competition", selectedId);
+  if (selectedAthleteId) next.set("athlete", selectedAthleteId);
   const query = next.toString();
   history.replaceState(null, "", query ? `?${query}` : location.pathname);
 }

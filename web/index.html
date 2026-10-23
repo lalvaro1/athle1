@@ -40,27 +40,94 @@
       </header>
 
       <main>
-        <section class="block picker-block" aria-labelledby="competition-label">
-          <label class="comp-picker" for="competition-select">
-            <span id="competition-label">Compétition</span>
-            <select id="competition-select" disabled>
-              <option value="">Chargement…</option>
-            </select>
-          </label>
-          <p id="status" class="status" role="status"></p>
-        </section>
+        <div class="tabs" role="tablist" aria-label="Navigation">
+          <button
+            type="button"
+            class="tabs__btn is-active"
+            role="tab"
+            id="tab-btn-competitions"
+            aria-selected="true"
+            aria-controls="tab-competitions"
+            data-tab="competitions"
+          >
+            Compétitions
+          </button>
+          <button
+            type="button"
+            class="tabs__btn"
+            role="tab"
+            id="tab-btn-athletes"
+            aria-selected="false"
+            aria-controls="tab-athletes"
+            data-tab="athletes"
+          >
+            Athlètes
+          </button>
+        </div>
 
-        <section id="planning" class="block planning" hidden aria-labelledby="planning-title">
-          <header class="planning__head">
-            <div class="planning__intro">
-              <p class="eyebrow">Planning club</p>
-              <h2 id="planning-title">Épreuves</h2>
-              <p id="planning-place" class="place"></p>
-            </div>
-            <p id="planning-meta" class="planning__meta"></p>
-          </header>
-          <div id="schedule" class="schedule"></div>
-        </section>
+        <div
+          id="tab-competitions"
+          class="tab-panel"
+          role="tabpanel"
+          aria-labelledby="tab-btn-competitions"
+        >
+          <section class="block picker-block" aria-labelledby="competition-label">
+            <label class="comp-picker" for="competition-select">
+              <span id="competition-label">Compétition</span>
+              <select id="competition-select" disabled>
+                <option value="">Chargement…</option>
+              </select>
+            </label>
+            <p id="status" class="status" role="status"></p>
+          </section>
+
+          <section id="planning" class="block planning" hidden aria-labelledby="planning-title">
+            <header class="planning__head">
+              <div class="planning__intro">
+                <p class="eyebrow">Planning club</p>
+                <h2 id="planning-title">Épreuves</h2>
+                <p id="planning-place" class="place"></p>
+              </div>
+              <p id="planning-meta" class="planning__meta"></p>
+            </header>
+            <div id="schedule" class="schedule"></div>
+          </section>
+        </div>
+
+        <div
+          id="tab-athletes"
+          class="tab-panel"
+          role="tabpanel"
+          aria-labelledby="tab-btn-athletes"
+          hidden
+        >
+          <section class="block picker-block" aria-labelledby="athlete-label">
+            <label class="comp-picker" for="athlete-select">
+              <span id="athlete-label">Athlète</span>
+              <select id="athlete-select" disabled>
+                <option value="">Chargement…</option>
+              </select>
+            </label>
+            <p id="athlete-status" class="status" role="status"></p>
+          </section>
+
+          <section
+            id="athlete-panel"
+            class="block planning"
+            hidden
+            aria-labelledby="athlete-panel-title"
+          >
+            <header class="planning__head">
+              <div class="planning__intro">
+                <p class="eyebrow">Fiche athlète</p>
+                <h2 id="athlete-panel-title">Athlète</h2>
+                <p id="athlete-panel-meta" class="place"></p>
+              </div>
+              <p id="athlete-panel-count" class="planning__meta"></p>
+            </header>
+            <div id="athlete-panel-body" class="athlete-panel__body"></div>
+          </section>
+        </div>
       </main>
 
       <footer class="foot">
