@@ -1,6 +1,7 @@
 # Déploie le site statique (web/) vers Cloudflare R2 : s3://athle/web/
 #
-# Secrets GitHub requis (Settings → Secrets and variables → Actions) :
+# Secrets GitHub requis dans l’environnement PROD
+# (Settings → Environments → PROD → Environment secrets) :
 #   R2_ACCOUNT_ID        — ID compte Cloudflare
 #   R2_ACCESS_KEY_ID     — Access Key ID (token R2 S3)
 #   R2_SECRET_ACCESS_KEY — Secret Access Key (token R2 S3)
@@ -26,6 +27,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: PROD
     permissions:
       contents: read
     steps:
