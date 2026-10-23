@@ -30,6 +30,12 @@ var ATHLE_CONFIG = {
   BILANS_YEAR: null,
 
   /**
+   * Ne conserve les perfs athlètes qu’à partir de l’année N - offset.
+   * Ex. 1 → garde N-1 et N (et saisons FFA plus récentes), ignore plus ancien.
+   */
+  ATHLETE_PERF_MIN_YEAR_OFFSET: 1,
+
+  /**
    * Si true, charge la fiche athle.fr de chaque athlète pour PB / SB
    * (section « Meilleures performances par saison »).
    */

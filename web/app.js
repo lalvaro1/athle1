@@ -35,6 +35,8 @@ let athletesList = [];
 const athletesById = new Map();
 /** @type {Map<string, Record<string, any>>} */
 const athletesByNameKey = new Map();
+/** @type {Map<string, Record<string, any>>} */
+const athleteDetailsById = new Map();
 
 competitionSelect.addEventListener("change", () => {
   selectedId = competitionSelect.value || null;
@@ -46,8 +48,7 @@ competitionSelect.addEventListener("change", () => {
 athleteSelect.addEventListener("change", () => {
   selectedAthleteId = athleteSelect.value || null;
   syncUrl();
-  const chosen = athletesById.get(String(selectedAthleteId));
-  if (chosen) showAthletePanel(chosen);
+  if (selectedAthleteId) showAthletePanelById(selectedAthleteId);
   else {
     athletePanelEl.hidden = true;
     athletePanelBodyEl.replaceChildren();
@@ -106,11 +107,11 @@ async function boot() {
 
     if (selectedAthleteId && athletesById.has(String(selectedAthleteId))) {
       athleteSelect.value = String(selectedAthleteId);
-      showAthletePanel(athletesById.get(String(selectedAthleteId)));
+      await showAthletePanelById(selectedAthleteId);
     } else if (athletesList.length) {
       selectedAthleteId = String(athletesList[0].athleteId);
       athleteSelect.value = selectedAthleteId;
-      showAthletePanel(athletesList[0]);
+      await showAthletePanelById(selectedAthleteId);
     }
 
     syncUrl();
@@ -191,28 +192,183 @@ function fillAthleteSelect(list) {
   athleteStatusEl.textContent = list.length === 1 ? "1 athlète" : `${list.length} athlètes`;
 }
 
-function showAthletePanel(athlete) {
+async function showAthletePanelById(athleteId) {
+  const id = String(athleteId || "");
+  const summary = athletesById.get(id);
+  if (!summary) {
+    athletePanelEl.hidden = true;
+    athletePanelBodyEl.replaceChildren();
+    return;
+  }
+
   athletePanelEl.hidden = false;
+  athletePanelTitleEl.textContent = formatAthleteName(summary.name);
+  athletePanelMetaEl.textContent = "Chargement de la fiche…";
+  athletePanelCountEl.textContent = "…";
+  athletePanelBodyEl.replaceChildren(
+    Object.assign(document.createElement("p"), {
+      className: "empty",
+      textContent: "Chargement des performances…",
+    }),
+  );
+
+  const detail = await loadAthleteDetail(id);
+  const athlete = detail || summary;
+  renderAthletePanel(athlete, Boolean(detail));
+}
+
+async function loadAthleteDetail(athleteId) {
+  const id = String(athleteId || "");
+  if (!id) return null;
+  if (athleteDetailsById.has(id)) return athleteDetailsById.get(id);
+  try {
+    const detail = await fetchJson(`athletes/${id}.json`, null);
+    if (detail?.athleteId) {
+      athleteDetailsById.set(id, detail);
+      return detail;
+    }
+  } catch (error) {
+    console.warn(`Fiche athletes/${id}.json indisponible`, error);
+  }
+  return null;
+}
+
+function renderAthletePanel(athlete, fromDetail) {
   athletePanelTitleEl.textContent = formatAthleteName(athlete.name);
-  athletePanelMetaEl.textContent = [athlete.youthCategory, athlete.categoryCode]
-    .filter(Boolean)
-    .join(" · ");
+  athletePanelMetaEl.textContent = athleteIdentityLine(athlete);
   const events = athlete.events || [];
+  const recent = athlete.recentResults || [];
   athletePanelCountEl.textContent =
     events.length === 1 ? "1 épreuve" : `${events.length} épreuves`;
+
   athletePanelBodyEl.replaceChildren();
-  if (!events.length) {
+  athletePanelBodyEl.append(renderAthleteFacts(athlete, fromDetail));
+
+  if (events.length) {
+    athletePanelBodyEl.append(renderSectionTitle("Meilleures performances"));
+    for (const entry of events) {
+      athletePanelBodyEl.append(renderAthleteEventCard(entry, false, { showSeasons: true }));
+    }
+  }
+
+  if (recent.length) {
+    athletePanelBodyEl.append(renderSectionTitle("Résultats récents"));
+    athletePanelBodyEl.append(renderRecentResults(recent));
+  }
+
+  if (!events.length && !recent.length) {
     athletePanelBodyEl.append(
       Object.assign(document.createElement("p"), {
         className: "empty",
-        textContent: "Pas encore d’infos détaillées pour cet athlète.",
+        textContent: fromDetail
+          ? "Aucune performance récente pour cet athlète."
+          : "Fiche détaillée indisponible — affichage de l’index compact.",
       }),
     );
-    return;
   }
-  for (const entry of events) {
-    athletePanelBodyEl.append(renderAthleteEventCard(entry, false));
+}
+
+function athleteIdentityLine(athlete) {
+  return [athlete.youthCategory, athlete.categoryCode, athlete.sex, athlete.birthYear]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function renderSectionTitle(text) {
+  return Object.assign(document.createElement("h3"), {
+    className: "athlete-section-title",
+    textContent: text,
+  });
+}
+
+function renderAthleteFacts(athlete, fromDetail) {
+  const wrap = document.createElement("div");
+  wrap.className = "athlete-facts";
+
+  const list = document.createElement("dl");
+  list.className = "athlete-facts__list";
+
+  // Naissance / catégorie déjà dans le sous-titre du header → on évite la redondance.
+  const facts = [
+    athlete.licence ? { label: "Licence", value: String(athlete.licence) } : null,
+    athlete.club?.name ? { label: "Club", value: athlete.club.name } : null,
+    !athlete.youthCategory && athlete.categoryCode
+      ? { label: "Code", value: athlete.categoryCode }
+      : null,
+  ].filter(Boolean);
+
+  for (const fact of facts) {
+    const row = document.createElement("div");
+    row.className = "athlete-facts__item";
+    row.append(
+      Object.assign(document.createElement("dt"), { textContent: fact.label }),
+      Object.assign(document.createElement("dd"), { textContent: fact.value }),
+    );
+    list.append(row);
   }
+
+  if (!facts.length && !fromDetail) {
+    const row = document.createElement("div");
+    row.className = "athlete-facts__item";
+    row.append(
+      Object.assign(document.createElement("dt"), { textContent: "Source" }),
+      Object.assign(document.createElement("dd"), { textContent: "Index compact" }),
+    );
+    list.append(row);
+  }
+
+  wrap.append(list);
+
+  if (athlete.profileUrl) {
+    const link = document.createElement("a");
+    link.className = "athlete-facts__link";
+    link.href = athlete.profileUrl;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.textContent = "Voir sur athle.fr";
+    wrap.append(link);
+  }
+
+  return wrap;
+}
+
+function renderRecentResults(results) {
+  const list = document.createElement("div");
+  list.className = "athlete-results";
+  for (const row of results) {
+    const item = document.createElement("article");
+    item.className = "athlete-result";
+
+    const when = document.createElement("div");
+    when.className = "athlete-result__date";
+    when.textContent = [row.date, row.venue].filter(Boolean).join(" · ");
+
+    const main = document.createElement("div");
+    main.className = "athlete-result__main";
+    const event = document.createElement("div");
+    event.className = "athlete-result__event";
+    event.textContent = row.event || "Épreuve";
+    main.append(event);
+    const meta = [row.round, row.place ? `${row.place}e` : "", row.points ? `${row.points} pts` : ""]
+      .filter(Boolean)
+      .join(" · ");
+    if (meta) {
+      main.append(
+        Object.assign(document.createElement("div"), {
+          className: "athlete-result__meta",
+          textContent: meta,
+        }),
+      );
+    }
+
+    const perf = document.createElement("div");
+    perf.className = "athlete-result__perf";
+    perf.textContent = row.performance || "—";
+
+    item.append(when, main, perf);
+    list.append(item);
+  }
+  return list;
 }
 
 function sortCompetitionsNewestFirst(list) {
@@ -483,51 +639,70 @@ function matchAthleteEvent(record, eventName) {
   return bestScore > 0 ? best : null;
 }
 
-function openAthleteDialog(lookupKey, eventName, fallbackName = "") {
+async function openAthleteDialog(lookupKey, eventName, fallbackName = "") {
   if (!athleteDialog) return;
-  const record = findAthleteRecordByKey(lookupKey);
+  const summary = findAthleteRecordByKey(lookupKey);
+  const athleteId =
+    summary?.athleteId ||
+    (lookupKey?.startsWith("id:") ? lookupKey.slice(3) : null);
 
-  athleteDialogTitle.textContent = formatAthleteName(record?.name || fallbackName || "Athlète");
-  athleteDialogMeta.textContent = record
-    ? [record.youthCategory, record.categoryCode].filter(Boolean).join(" · ")
+  athleteDialogTitle.textContent = formatAthleteName(summary?.name || fallbackName || "Athlète");
+  athleteDialogMeta.textContent = summary
+    ? athleteIdentityLine(summary)
     : athletesById.size
       ? "Pas encore dans la base athlètes"
       : "Base athlètes non chargée";
+  athleteDialogBody.replaceChildren(
+    Object.assign(document.createElement("p"), {
+      className: "athlete-dialog__empty",
+      textContent: "Chargement…",
+    }),
+  );
 
+  if (typeof athleteDialog.showModal === "function") athleteDialog.showModal();
+  else athleteDialog.setAttribute("open", "");
+
+  const detail = athleteId ? await loadAthleteDetail(athleteId) : null;
+  const record = detail || summary;
   athleteDialogBody.replaceChildren();
+
   if (!record) {
     athleteDialogBody.append(
       Object.assign(document.createElement("p"), {
         className: "athlete-dialog__empty",
         textContent: athletesById.size
-          ? "Cet athlète n’est pas encore présent dans athletes.json. Relance runAthleSyncAthletes."
+          ? "Cet athlète n’est pas encore présent dans athletes.json."
           : "Impossible de charger athletes.json depuis R2.",
       }),
     );
-  } else {
-    const focusEvent = matchAthleteEvent(record, eventName);
-    const otherEvents = (record.events || []).filter(
-      (entry) => !focusEvent || entry.event !== focusEvent.event,
-    );
-    if (focusEvent) athleteDialogBody.append(renderAthleteEventCard(focusEvent, true));
-    for (const entry of otherEvents) {
-      athleteDialogBody.append(renderAthleteEventCard(entry, false));
-    }
-    if (!focusEvent && !otherEvents.length) {
-      athleteDialogBody.append(
-        Object.assign(document.createElement("p"), {
-          className: "athlete-dialog__empty",
-          textContent: "Aucune performance PB/SB disponible pour cet athlète.",
-        }),
-      );
-    }
+    return;
   }
 
-  if (typeof athleteDialog.showModal === "function") athleteDialog.showModal();
-  else athleteDialog.setAttribute("open", "");
+  athleteDialogTitle.textContent = formatAthleteName(record.name || fallbackName);
+  athleteDialogMeta.textContent = athleteIdentityLine(record);
+  if (detail) athleteDialogBody.append(renderAthleteFacts(detail, true));
+
+  const focusEvent = matchAthleteEvent(record, eventName);
+  const otherEvents = (record.events || []).filter(
+    (entry) => !focusEvent || entry.event !== focusEvent.event,
+  );
+  if (focusEvent) {
+    athleteDialogBody.append(renderAthleteEventCard(focusEvent, true, { showSeasons: true }));
+  }
+  for (const entry of otherEvents) {
+    athleteDialogBody.append(renderAthleteEventCard(entry, false, { showSeasons: Boolean(detail) }));
+  }
+  if (!focusEvent && !otherEvents.length) {
+    athleteDialogBody.append(
+      Object.assign(document.createElement("p"), {
+        className: "athlete-dialog__empty",
+        textContent: "Aucune performance PB/SB disponible pour cet athlète.",
+      }),
+    );
+  }
 }
 
-function renderAthleteEventCard(entry, focused) {
+function renderAthleteEventCard(entry, focused, options = {}) {
   const card = document.createElement("article");
   card.className = focused ? "athlete-best is-focus" : "athlete-best";
 
@@ -548,6 +723,25 @@ function renderAthleteEventCard(entry, focused) {
     return card;
   }
   card.append(marks);
+
+  if (options.showSeasons && Array.isArray(entry.bySeason) && entry.bySeason.length) {
+    const seasons = document.createElement("ul");
+    seasons.className = "athlete-seasons";
+    for (const row of entry.bySeason) {
+      const item = document.createElement("li");
+      item.textContent = [
+        row.season,
+        row.performance,
+        row.date,
+        row.place,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      seasons.append(item);
+    }
+    card.append(seasons);
+  }
+
   return card;
 }
 

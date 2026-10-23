@@ -58,7 +58,7 @@ function r2UploadJson(relativeFilename, obj) {
 function r2PutObject(relativeFilename, contentType, body) {
   var cfg = r2GetConfig();
   var objectKey = r2BuildObjectKey(cfg.keyPrefix, relativeFilename);
-  var response = UrlFetchApp.fetch(r2ObjectUrl(objectKey), {
+  var response = r2FetchWithRetry(r2ObjectUrl(objectKey), {
     method: 'put',
     payload: String(body),
     muteHttpExceptions: true,
@@ -80,6 +80,39 @@ function r2PutObject(relativeFilename, contentType, body) {
   }
 
   return { bucket: cfg.bucket, key: objectKey, version: R2_STORAGE_VERSION };
+}
+
+/**
+ * UrlFetch avec retries (erreurs réseau GAS du type "Address unavailable", 429/5xx).
+ */
+function r2FetchWithRetry(url, options, maxAttempts) {
+  maxAttempts = maxAttempts || 4;
+  var lastError = null;
+  for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      var response = UrlFetchApp.fetch(url, options);
+      var code = response.getResponseCode();
+      if (code === 429 || code === 502 || code === 503 || code === 504) {
+        lastError = new Error('HTTP ' + code);
+        if (attempt < maxAttempts) {
+          Utilities.sleep(500 * attempt * attempt);
+          continue;
+        }
+      }
+      return response;
+    } catch (err) {
+      lastError = err;
+      var msg = String((err && err.message) || err);
+      var transient =
+        /Address unavailable|Timeout|DNS|Failed to fetch|Unexpected error|Service unavailable/i.test(
+          msg,
+        );
+      if (!transient || attempt >= maxAttempts) throw err;
+      Logger.log('R2 retry %s/%s — %s', attempt, maxAttempts, msg.slice(0, 120));
+      Utilities.sleep(500 * attempt * attempt);
+    }
+  }
+  throw lastError || new Error('R2 fetch failed');
 }
 
 /**

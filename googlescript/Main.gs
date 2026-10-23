@@ -6,15 +6,17 @@
  * 2. runAthleSyncForToday() — sync du jour
  * 3. getAllDataForMonth(10, 2026) — backfill manuel mois par mois
  * 4. rebuildCompetitionsIndexFromBucket() — reconstruit competitions.json depuis R2
- * 5. runAthleSyncAthletes() — base athlètes U14/U16 (bilans club) → athletes.json
- * 6. installHourlyTrigger() une fois
+ * 5. runAthleSyncAthletes() — index compact → data/athletes.json
+ * 6. runAthleSyncAthleteDetails() — fiche complète → data/athletes/{id}.json (+ index)
+ * 7. installHourlyTrigger() une fois
  *
  * Index agrégé : data/competitions.json (append des nouvelles compétitions).
- * Athlètes : data/athletes.json
+ * Athlètes : data/athletes.json + data/athletes/{id}.json
  */
 
 var COMPETITIONS_INDEX_FILE = 'competitions.json';
 var ATHLETES_FILE = 'athletes.json';
+var ATHLETES_DIR = 'athletes';
 
 /**
  * Parcourt les JSON détail déjà présents dans R2 (fichiers data/YYYY-MM-DD_….json)
@@ -247,7 +249,7 @@ function runGetAllDataForMonth() {
 
 /**
  * Récupère la base athlètes U14/U16 du club via les bilans FFA
- * (catégories BE + MI) et écrit data/athletes.json sur R2.
+ * (catégories BE + MI) et écrit data/athletes.json sur R2 (index compact).
  */
 function runAthleSyncAthletes() {
   r2GetConfig();
@@ -281,6 +283,130 @@ function runAthleSyncAthletes() {
     seasonYear: stats.seasonYear,
     objectKey: objectKey,
   };
+}
+
+/**
+ * Pour chaque athlète listé dans data/athletes.json :
+ * récupère la fiche athle.fr complète et écrit data/athletes/{id}.json.
+ * Met aussi à jour l’index compact data/athletes.json.
+ *
+ * Plus rapide : ne reconstruit pas la liste via bilans/compétitions.
+ * Prérequis : avoir déjà un athletes.json (runAthleSyncAthletes).
+ *
+ * À lancer à la main (peut prendre quelques minutes).
+ */
+function runAthleSyncAthleteDetails() {
+  r2GetConfig();
+  Logger.log(
+    'Sync fiches athlètes → %s/{id}.json — club %s',
+    r2ObjectKey(ATHLETES_DIR),
+    ATHLE_CONFIG.CLUB_NAME,
+  );
+
+  var seeds = athleLoadAthleteSeedsFromIndex();
+  if (!seeds.length) {
+    throw new Error(
+      'Aucun athlète dans ' +
+        r2ObjectKey(ATHLETES_FILE) +
+        ' — lance d’abord runAthleSyncAthletes()',
+    );
+  }
+  Logger.log('%s athlète(s) lus depuis %s', seeds.length, r2ObjectKey(ATHLETES_FILE));
+
+  var compact = [];
+  var ok = 0;
+  var errors = 0;
+
+  for (var i = 0; i < seeds.length; i++) {
+    var seed = seeds[i];
+    var id = String(seed.athleteId);
+    try {
+      if (i > 0) athleMaybeSleep();
+      Logger.log('[%s/%s] %s — %s', i + 1, seeds.length, id, seed.name);
+      var detail = athleFetchAthleteFullDetail(id, {
+        name: seed.name,
+        categoryCode: seed.categoryCode,
+        youthCategory: seed.youthCategory,
+        clubId: ATHLE_CONFIG.CLUB_ID,
+        clubName: ATHLE_CONFIG.CLUB_NAME,
+      });
+      var fileName = ATHLETES_DIR + '/' + id + '.json';
+      r2PutObject(fileName, 'application/json; charset=utf-8', JSON.stringify(detail));
+      compact.push(athleCompactAthleteFromDetail(detail));
+      ok += 1;
+    } catch (err) {
+      errors += 1;
+      Logger.log('  ERREUR %s : %s', id, err.message || err);
+      // Conserve l’entrée d’index existante (ou minimale) si la fiche échoue.
+      compact.push({
+        athleteId: id,
+        name: seed.name,
+        categoryCode: seed.categoryCode || null,
+        youthCategory: seed.youthCategory || null,
+        events: Array.isArray(seed.events) ? seed.events : [],
+      });
+    }
+  }
+
+  compact.sort(function (a, b) {
+    return String(a.name || '').localeCompare(String(b.name || ''), 'fr');
+  });
+  r2PutObject(
+    ATHLETES_FILE,
+    'application/json; charset=utf-8',
+    JSON.stringify({ athletes: compact }),
+  );
+
+  Logger.log(
+    'Fiches athlètes OK — %s écrite(s), %s erreur(s), index %s',
+    ok,
+    errors,
+    r2ObjectKey(ATHLETES_FILE),
+  );
+  return {
+    count: seeds.length,
+    written: ok,
+    errors: errors,
+    indexKey: r2ObjectKey(ATHLETES_FILE),
+    dirKey: r2ObjectKey(ATHLETES_DIR),
+  };
+}
+
+/** Lit les seeds (id, name, …) depuis data/athletes.json. */
+function athleLoadAthleteSeedsFromIndex() {
+  var index = r2DownloadJson(ATHLETES_FILE);
+  var list = index && index.athletes ? index.athletes : [];
+  var seeds = [];
+  var seen = {};
+  for (var i = 0; i < list.length; i++) {
+    var row = list[i];
+    if (!row || !row.athleteId) continue;
+    var id = String(row.athleteId);
+    if (seen[id]) continue;
+    seen[id] = true;
+    seeds.push({
+      athleteId: id,
+      name: row.name || id,
+      categoryCode: row.categoryCode || null,
+      youthCategory: row.youthCategory || null,
+      events: row.events || [],
+    });
+  }
+  return seeds;
+}
+
+/** Test rapide : une seule fiche → data/athletes/{id}.json */
+function runAthleSyncAthleteDetailOne() {
+  r2GetConfig();
+  var athleteId = '3503600'; // ← changez l’id pour tester
+  var detail = athleFetchAthleteFullDetail(athleteId, {
+    clubId: ATHLE_CONFIG.CLUB_ID,
+    clubName: ATHLE_CONFIG.CLUB_NAME,
+  });
+  var fileName = ATHLETES_DIR + '/' + athleteId + '.json';
+  r2PutObject(fileName, 'application/json; charset=utf-8', JSON.stringify(detail));
+  Logger.log('OK → %s (%s épreuves, %s résultats)', r2ObjectKey(fileName), detail.events.length, detail.recentResults.length);
+  return detail;
 }
 
 /**

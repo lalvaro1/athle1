@@ -558,6 +558,19 @@ function athleBilansYear() {
   return Number(Utilities.formatDate(new Date(), tz, 'yyyy'));
 }
 
+/** Année mini des perfs conservées (N - ATHLETE_PERF_MIN_YEAR_OFFSET). */
+function athleMinPerformanceYear() {
+  var offset = 1;
+  if (
+    typeof ATHLE_CONFIG !== 'undefined' &&
+    ATHLE_CONFIG.ATHLETE_PERF_MIN_YEAR_OFFSET != null
+  ) {
+    offset = Number(ATHLE_CONFIG.ATHLETE_PERF_MIN_YEAR_OFFSET);
+  }
+  if (isNaN(offset) || offset < 0) offset = 1;
+  return athleBilansYear() - offset;
+}
+
 /**
  * Mappe un code bilan FFA (BE/MI/…) vers U14/U16.
  * @return {'U14'|'U16'|null}
@@ -835,7 +848,7 @@ function athleBuildAthleteProfileUrl(athleteId) {
 }
 
 /**
- * Enrichit un athlète avec les PB/SB depuis sa fiche profil.
+ * Enrichit un athlète avec les PB/SB depuis sa fiche profil (format compact).
  */
 function athleEnrichAthleteFromProfile(athlete) {
   var html = athleFetchHtml(athleBuildAthleteProfileUrl(athlete.athleteId));
@@ -846,8 +859,60 @@ function athleEnrichAthleteFromProfile(athlete) {
       athlete.youthCategory = athleYouthCategoryFromBilansCode(identity.categoryCode);
     }
   }
-  athlete.events = athleParseAthleteSeasonBests(html);
+  athlete.events = athleParseAthleteSeasonBests(html, { detailed: false });
   return athlete;
+}
+
+/**
+ * Fiche athlète complète (identité + bests détaillés + résultats récents).
+ * @param {string} athleteId
+ * @param {Object=} seed champs déjà connus (name, categoryCode, …)
+ */
+function athleFetchAthleteFullDetail(athleteId, seed) {
+  seed = seed || {};
+  var id = String(athleteId);
+  var profileUrl = athleBuildAthleteProfileUrl(id);
+  var html = athleFetchHtml(profileUrl);
+  var identity = athleParseAthleteProfileIdentity(html);
+  var categoryCode = identity.categoryCode || seed.categoryCode || null;
+  var youthCategory =
+    athleYouthCategoryFromBilansCode(categoryCode) || seed.youthCategory || null;
+
+  return {
+    athleteId: id,
+    name: identity.displayName || seed.name || id,
+    profileUrl: profileUrl,
+    fetchedAt: new Date().toISOString(),
+    birthYear: identity.birthYear,
+    licence: identity.licence,
+    sex: identity.sex || null,
+    categoryCode: categoryCode,
+    youthCategory: youthCategory,
+    club: {
+      id: String(seed.clubId || ATHLE_CONFIG.CLUB_ID || ''),
+      name: identity.clubName || seed.clubName || ATHLE_CONFIG.CLUB_NAME || '',
+    },
+    events: athleParseAthleteSeasonBests(html, { detailed: true }),
+    recentResults: athleParseAthleteRecentResults(html),
+  };
+}
+
+/**
+ * Index compact dérivé d’une fiche détaillée (pour athletes.json).
+ */
+function athleCompactAthleteFromDetail(detail) {
+  return {
+    athleteId: detail.athleteId,
+    name: detail.name,
+    categoryCode: detail.categoryCode,
+    youthCategory: detail.youthCategory,
+    events: (detail.events || []).map(function (entry) {
+      var out = { event: entry.event };
+      if (entry.pb) out.pb = entry.pb;
+      if (entry.sb) out.sb = entry.sb;
+      return out;
+    }),
+  };
 }
 
 function athleParseAthleteProfileIdentity(html) {
@@ -858,13 +923,68 @@ function athleParseAthleteProfileIdentity(html) {
     /Catégorie\s*\/\s*Nationalité\s*:\s*<\/span>\s*([A-Za-z]{1,4})\s*(?:<span[^>]*>\s*\/\s*<\/span>\s*([A-Za-z]))?/i,
   );
   var sex = cat && cat[2] ? String(cat[2]).toUpperCase() : null;
+  var nameMatch = html.match(/<h2[^>]*>([\s\S]*?)<\/h2>/i);
   return {
+    displayName: nameMatch ? athleStripHtml(nameMatch[1]) : null,
     birthYear: birth ? Number(birth[1]) : null,
     clubName: club ? athleStripHtml(club[1]) : null,
     licence: licence ? athleStripHtml(licence[1]) : null,
     categoryCode: cat ? String(cat[1]).toUpperCase() : null,
     sex: sex === 'F' || sex === 'M' ? sex : null,
   };
+}
+
+/**
+ * Tableau « résultats récents » de la fiche (avant les meilleures perfs).
+ */
+function athleParseAthleteRecentResults(html) {
+  var end = html.indexOf('Meilleures performances par saison');
+  var chunk = end === -1 ? html : html.substring(0, end);
+  var tableMatch = chunk.match(
+    /<table[^>]*class="[^"]*base-table[^"]*"[^>]*>([\s\S]*?)<\/table>/i,
+  );
+  if (!tableMatch) return [];
+  var body = tableMatch[1];
+  if (!/Epreuve/i.test(body) || !/Performance/i.test(body)) return [];
+
+  var minYear = athleMinPerformanceYear();
+  var rows = [];
+  var trRe = /<tr(?![^>]*detail-row)[^>]*>([\s\S]*?)<\/tr>/gi;
+  var trMatch;
+  while ((trMatch = trRe.exec(body)) !== null) {
+    var chunkTr = trMatch[1];
+    if (/<th\b/i.test(chunkTr)) continue;
+    var tds = [];
+    var tdRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+    var tdMatch;
+    while ((tdMatch = tdRe.exec(chunkTr)) !== null) {
+      tds.push(athleStripHtml(tdMatch[1]));
+    }
+    // Date | Epreuve | Performance | Vent | Tour | Place | Niveau | Points | Lieu
+    if (tds.length < 6) continue;
+    if (!tds[0] || !tds[1]) continue;
+    var yearInDate = athleYearFromDateLabel(tds[0]);
+    // Si l’année est connue et trop ancienne, on ignore ; sinon on garde (table « récente »).
+    if (yearInDate != null && yearInDate < minYear) continue;
+    rows.push({
+      date: tds[0] || null,
+      event: tds[1] || null,
+      performance: athleCompactMark(tds[2] || ''),
+      wind: tds[3] || null,
+      round: tds[4] || null,
+      place: tds[5] || null,
+      level: tds[6] || null,
+      points: tds[7] || null,
+      venue: tds[8] || null,
+    });
+  }
+  return rows;
+}
+
+/** Extrait une année 20xx depuis un libellé de date FFA, sinon null. */
+function athleYearFromDateLabel(dateLabel) {
+  var match = String(dateLabel || '').match(/\b(20\d{2})\b/);
+  return match ? Number(match[1]) : null;
 }
 
 /** Nettoie une marque : retire vent / mentions entre parenthèses. */
@@ -877,9 +997,12 @@ function athleCompactMark(perf) {
 
 /**
  * Section « Meilleures performances par saison » de la fiche athlète.
- * @return {Array<{event:string, pb:string, sb:string}>}
+ * @param {string} html
+ * @param {{detailed?: boolean}=} options detailed=true conserve bySeason[]
  */
-function athleParseAthleteSeasonBests(html) {
+function athleParseAthleteSeasonBests(html, options) {
+  options = options || {};
+  var detailed = !!options.detailed;
   var marker = 'Meilleures performances par saison';
   var start = html.indexOf(marker);
   if (start === -1) return [];
@@ -922,32 +1045,52 @@ function athleParseAthleteSeasonBests(html) {
         highlighted: /<b\b/i.test(perfHtml),
       });
     }
+    bySeason = athleFilterSeasonsFromMinYear(bySeason);
     if (!bySeason.length) continue;
-    events.push(athleBuildEventBests(eventName, bySeason));
+    events.push(athleBuildEventBests(eventName, bySeason, detailed));
   }
   return events;
 }
 
-function athleBuildEventBests(eventName, bySeason) {
+/** Garde uniquement les saisons >= N-1 (voir ATHLETE_PERF_MIN_YEAR_OFFSET). */
+function athleFilterSeasonsFromMinYear(bySeason) {
+  var minYear = athleMinPerformanceYear();
+  var kept = [];
+  for (var i = 0; i < (bySeason || []).length; i++) {
+    var row = bySeason[i];
+    if (Number(row.season) >= minYear) kept.push(row);
+  }
+  return kept;
+}
+
+function athleBuildEventBests(eventName, bySeason, detailed) {
   var pb = null;
   var sb = null;
   var latestSeason = null;
-  var highlighted = null;
+  // Après filtre N-1, on recalcule PB/SB sans se fier au gras FFA (souvent all-time).
   for (var i = 0; i < bySeason.length; i++) {
     var row = bySeason[i];
     if (latestSeason == null || Number(row.season) > Number(latestSeason)) {
       latestSeason = row.season;
       sb = row;
     }
-    if (row.highlighted && !highlighted) highlighted = row;
     if (!pb || athleIsBetterPerformance(row.performance, pb.performance, eventName)) {
       pb = row;
     }
   }
-  if (highlighted) pb = highlighted;
   var out = { event: eventName };
   if (pb && pb.performance) out.pb = athleCompactMark(pb.performance);
   if (sb && sb.performance) out.sb = athleCompactMark(sb.performance);
+  if (detailed) {
+    out.bySeason = bySeason.map(function (row) {
+      return {
+        season: row.season,
+        date: row.date,
+        performance: athleCompactMark(row.performance),
+        place: row.place,
+      };
+    });
+  }
   return out;
 }
 
