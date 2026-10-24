@@ -793,9 +793,11 @@ html.dialog-open body {
   }
 
   .athlete-dialog {
+    left: 0;
+    right: 0;
     width: calc(100% - 1rem);
     max-height: min(92dvh, 92vh);
-    margin: auto 0.5rem;
+    margin-inline: auto;
   }
 
   .athlete-dialog__panel {
