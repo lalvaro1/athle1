@@ -330,6 +330,16 @@ function runAthleSyncAthleteDetails() {
         clubId: ATHLE_CONFIG.CLUB_ID,
         clubName: ATHLE_CONFIG.CLUB_NAME,
       });
+      if (!athleIsAllowedYouthCategory(detail.youthCategory)) {
+        Logger.log(
+          '  skip %s (%s) — catégorie %s hors %s',
+          id,
+          detail.name,
+          detail.youthCategory || detail.categoryCode || '?',
+          (ATHLE_CONFIG.YOUTH_CATEGORIES || []).join('/'),
+        );
+        continue;
+      }
       var fileName = ATHLETES_DIR + '/' + id + '.json';
       r2PutObject(fileName, 'application/json; charset=utf-8', JSON.stringify(detail));
       compact.push(athleCompactAthleteFromDetail(detail));
@@ -383,12 +393,16 @@ function athleLoadAthleteSeedsFromIndex() {
     if (!row || !row.athleteId) continue;
     var id = String(row.athleteId);
     if (seen[id]) continue;
+    var youth =
+      row.youthCategory || athleYouthCategoryFromBilansCode(row.categoryCode || '');
+    // Nettoie un index déjà pollué par des catégories hors U14/U16.
+    if (!athleIsAllowedYouthCategory(youth)) continue;
     seen[id] = true;
     seeds.push({
       athleteId: id,
       name: row.name || id,
       categoryCode: row.categoryCode || null,
-      youthCategory: row.youthCategory || null,
+      youthCategory: youth || null,
       events: row.events || [],
     });
   }

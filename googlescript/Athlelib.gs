@@ -487,8 +487,14 @@ function athleGetClubEpreuvesInCompetition(competitionId, clubNameOrId, knownClu
   var participantRows = athleParseClubParticipantRows(clubHtml);
 
   var byEpreuve = {};
+  var skippedOtherCategories = 0;
   for (var r = 0; r < participantRows.length; r++) {
     var row = participantRows[r];
+    // Compétitions multi-niveaux : ne garder que U14/U16 (YOUTH_CATEGORIES).
+    if (!athleIsAllowedYouthAthleteCategory(row.category)) {
+      skippedOtherCategories += 1;
+      continue;
+    }
     var matched = athleMatchEpreuveOption(row.epreuveName, epreuveOptions);
     var displayName = athlePreferEpreuveDisplayName([
       matched && matched.name,
@@ -513,6 +519,14 @@ function athleGetClubEpreuvesInCompetition(competitionId, clubNameOrId, knownClu
     copy.epreuveName = displayName || row.epreuveName;
     copy.horaire = null;
     byEpreuve[key].participants.push(copy);
+  }
+  if (skippedOtherCategories) {
+    Logger.log(
+      'Compétition %s — %s participant(s) hors %s ignoré(s)',
+      compId,
+      skippedOtherCategories,
+      (athleAllowedYouthCategories() || []).join('/'),
+    );
   }
 
   var scheduleCache = {};
@@ -619,6 +633,36 @@ function athleYouthCategoryFromBilansCode(code) {
   if (c.indexOf('BE') === 0) return 'U14';
   if (c.indexOf('MI') === 0) return 'U16';
   return null;
+}
+
+/**
+ * Catégories jeunes autorisées (YOUTH_CATEGORIES).
+ * [] / null / undefined → pas de filtre.
+ */
+function athleAllowedYouthCategories() {
+  if (typeof ATHLE_CONFIG === 'undefined' || ATHLE_CONFIG.YOUTH_CATEGORIES == null) {
+    return ['U14', 'U16'];
+  }
+  var cats = ATHLE_CONFIG.YOUTH_CATEGORIES;
+  if (!cats.length) return null;
+  return cats;
+}
+
+/** true si youthCategory ∈ YOUTH_CATEGORIES (ou si aucun filtre). */
+function athleIsAllowedYouthCategory(youthCategory) {
+  var allowed = athleAllowedYouthCategories();
+  if (!allowed) return true;
+  var y = String(youthCategory || '');
+  for (var i = 0; i < allowed.length; i++) {
+    if (String(allowed[i]) === y) return true;
+  }
+  return false;
+}
+
+/** Catégorie participant/bilan (ex. "MIF/12") → U14/U16 autorisé ? */
+function athleIsAllowedYouthAthleteCategory(categoryRaw) {
+  var parsed = athleParseBilansAthleteCategory(categoryRaw || '');
+  return athleIsAllowedYouthCategory(parsed.youthCategory);
 }
 
 /**
@@ -765,6 +809,7 @@ function athleGetClubYouthAthletes(options) {
       var row = rows[i];
       if (!row.athleteId) continue;
       var parsedCat = athleParseBilansAthleteCategory(row.category);
+      if (!athleIsAllowedYouthCategory(parsedCat.youthCategory)) continue;
       var current = byId[row.athleteId];
       if (!current) {
         byId[row.athleteId] = {
@@ -789,7 +834,10 @@ function athleGetClubYouthAthletes(options) {
   }
 
   var athletes = [];
-  for (var id in byId) athletes.push(byId[id]);
+  for (var id in byId) {
+    if (!athleIsAllowedYouthCategory(byId[id].youthCategory)) continue;
+    athletes.push(byId[id]);
+  }
   athletes.sort(function (a, b) {
     return String(a.name || '').localeCompare(String(b.name || ''), 'fr');
   });
@@ -800,6 +848,7 @@ function athleGetClubYouthAthletes(options) {
       : !!(typeof ATHLE_CONFIG !== 'undefined' && ATHLE_CONFIG.ENRICH_ATHLETE_PROFILES);
   var enriched = 0;
   var enrichErrors = 0;
+  var droppedAfterEnrich = 0;
   if (enrich) {
     Logger.log('Enrichissement fiches athlètes (%s) pour PB/SB…', athletes.length);
     for (var a = 0; a < athletes.length; a++) {
@@ -817,6 +866,16 @@ function athleGetClubYouthAthletes(options) {
         );
       }
     }
+    // La fiche profil peut corriger la catégorie (ex. cadet listé par erreur).
+    var kept = [];
+    for (var k = 0; k < athletes.length; k++) {
+      if (athleIsAllowedYouthCategory(athletes[k].youthCategory)) kept.push(athletes[k]);
+      else droppedAfterEnrich += 1;
+    }
+    athletes = kept;
+    if (droppedAfterEnrich) {
+      Logger.log('Athlètes hors U14/U16 retirés après fiche profil : %s', droppedAfterEnrich);
+    }
   }
 
   return {
@@ -825,6 +884,7 @@ function athleGetClubYouthAthletes(options) {
       fromCompetitions: fromCompetitions,
       enrichedProfiles: enriched,
       enrichErrors: enrichErrors,
+      droppedOtherCategories: droppedAfterEnrich,
       seasonYear: year,
       count: athletes.length,
     },
@@ -858,6 +918,7 @@ function athleMergeAthletesFromCompetitionDetails(byId) {
         var athleteId = part.athleteId ? String(part.athleteId) : '';
         if (!athleteId) continue;
         var parsedCat = athleParseBilansAthleteCategory(part.category || '');
+        if (!athleIsAllowedYouthCategory(parsedCat.youthCategory)) continue;
         if (byId[athleteId]) {
           if (!byId[athleteId].name && part.athleteName) byId[athleteId].name = part.athleteName;
           if (!byId[athleteId].categoryCode && parsedCat.code) {

@@ -23,6 +23,9 @@ const tabButtons = [...document.querySelectorAll(".tabs__btn")];
 const tabCompetitions = document.querySelector("#tab-competitions");
 const tabAthletes = document.querySelector("#tab-athletes");
 
+/** Scroll Y figé pendant l’ouverture de la modale (iOS). */
+let dialogScrollLockY = 0;
+
 const params = new URLSearchParams(location.search);
 let activeTab = params.get("tab") === "athletes" ? "athletes" : "competitions";
 let selectedId = params.get("competition");
@@ -57,6 +60,11 @@ athleteSelect.addEventListener("change", () => {
 
 for (const button of tabButtons) {
   button.addEventListener("click", () => setActiveTab(button.dataset.tab || "competitions"));
+}
+
+if (athleteDialog) {
+  athleteDialog.addEventListener("close", unlockDialogScroll);
+  athleteDialog.addEventListener("cancel", unlockDialogScroll);
 }
 
 scheduleEl.addEventListener("click", (event) => {
@@ -669,6 +677,27 @@ function matchAthleteEvent(record, eventName) {
   return bestScore > 0 ? best : null;
 }
 
+function lockDialogScroll() {
+  dialogScrollLockY = window.scrollY || window.pageYOffset || 0;
+  document.documentElement.classList.add("dialog-open");
+  document.body.style.position = "fixed";
+  document.body.style.top = `-${dialogScrollLockY}px`;
+  document.body.style.left = "0";
+  document.body.style.right = "0";
+  document.body.style.width = "100%";
+}
+
+function unlockDialogScroll() {
+  if (!document.documentElement.classList.contains("dialog-open")) return;
+  document.documentElement.classList.remove("dialog-open");
+  document.body.style.position = "";
+  document.body.style.top = "";
+  document.body.style.left = "";
+  document.body.style.right = "";
+  document.body.style.width = "";
+  window.scrollTo(0, dialogScrollLockY);
+}
+
 async function openAthleteDialog(lookupKey, eventName, fallbackName = "") {
   if (!athleteDialog) return;
   const summary = findAthleteRecordByKey(lookupKey);
@@ -689,8 +718,11 @@ async function openAthleteDialog(lookupKey, eventName, fallbackName = "") {
     }),
   );
 
+  lockDialogScroll();
   if (typeof athleteDialog.showModal === "function") athleteDialog.showModal();
   else athleteDialog.setAttribute("open", "");
+  // Remonte le contenu au bandeau (bouton fermer toujours accessible).
+  athleteDialogBody.scrollTop = 0;
 
   const detail = athleteId ? await loadAthleteDetail(athleteId) : null;
   const record = detail || summary;

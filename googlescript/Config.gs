@@ -15,7 +15,10 @@ var ATHLE_CONFIG = {
   /** Fuseau pour « aujourd’hui » */
   TIMEZONE: 'Europe/Paris',
 
-  /** Filtre calendrier U14 / U16 (mettre [] pour tout prendre) */
+  /**
+   * Filtre U14 / U16 : calendrier, participants compétition, base athlètes.
+   * Mettre [] pour tout prendre.
+   */
   YOUTH_CATEGORIES: ['U14', 'U16'],
 
   /**
