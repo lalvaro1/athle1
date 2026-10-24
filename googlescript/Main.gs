@@ -325,6 +325,7 @@ function runAthleSyncAthleteDetails() {
       Logger.log('[%s/%s] %s — %s', i + 1, seeds.length, id, seed.name);
       var detail = athleFetchAthleteFullDetail(id, {
         name: seed.name,
+        birthYear: seed.birthYear,
         categoryCode: seed.categoryCode,
         youthCategory: seed.youthCategory,
         clubId: ATHLE_CONFIG.CLUB_ID,
@@ -351,6 +352,7 @@ function runAthleSyncAthleteDetails() {
       compact.push({
         athleteId: id,
         name: seed.name,
+        birthYear: seed.birthYear || null,
         categoryCode: seed.categoryCode || null,
         youthCategory: seed.youthCategory || null,
         events: Array.isArray(seed.events) ? seed.events : [],
@@ -393,14 +395,16 @@ function athleLoadAthleteSeedsFromIndex() {
     if (!row || !row.athleteId) continue;
     var id = String(row.athleteId);
     if (seen[id]) continue;
-    var youth =
-      row.youthCategory || athleYouthCategoryFromBilansCode(row.categoryCode || '');
+    var youth = row.birthYear
+      ? athleYouthCategoryFromBirthYear(row.birthYear, athleBilansYear())
+      : row.youthCategory || athleYouthCategoryFromBilansCode(row.categoryCode || '');
     // Nettoie un index déjà pollué par des catégories hors U14/U16.
     if (!athleIsAllowedYouthCategory(youth)) continue;
     seen[id] = true;
     seeds.push({
       athleteId: id,
       name: row.name || id,
+      birthYear: row.birthYear || null,
       categoryCode: row.categoryCode || null,
       youthCategory: youth || null,
       events: row.events || [],

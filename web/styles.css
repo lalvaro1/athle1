@@ -264,6 +264,10 @@ main {
 }
 
 .athlete-seasons li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
   padding: 0.2rem 0;
   border-top: 1px dashed rgba(64, 80, 255, 0.12);
 }
@@ -313,6 +317,62 @@ main {
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.athlete-result__performance {
+  display: grid;
+  justify-items: end;
+  gap: 0.3rem;
+}
+
+.performance-score {
+  --score: 0;
+  --score-color: #b6bac8;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  min-width: 5.2rem;
+}
+
+.performance-score__bar {
+  display: block;
+  width: 3.6rem;
+  height: 0.42rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5e7ee;
+  box-shadow: inset 0 0 0 1px rgba(34, 34, 34, 0.05);
+}
+
+.performance-score__bar i {
+  display: block;
+  width: calc(var(--score) * 2%);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--score-color);
+}
+
+.performance-score strong {
+  min-width: 2.3rem;
+  color: var(--score-color);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.performance-score--compact {
+  min-width: 4.4rem;
+}
+
+.performance-score--compact .performance-score__bar {
+  width: 2.7rem;
+}
+
+.performance-score--compact strong {
+  min-width: 2rem;
+  font-size: 0.65rem;
 }
 
 @media (max-width: 700px) {
@@ -692,7 +752,11 @@ html.dialog-open body {
   font-weight: 700;
 }
 
-.athlete-best__mark span {
+.athlete-best__mark .performance-score {
+  margin-left: 0.15rem;
+}
+
+.athlete-best__mark > span {
   color: var(--muted);
   font-size: 0.72rem;
   font-weight: 700;

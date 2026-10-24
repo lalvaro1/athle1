@@ -40,6 +40,8 @@ const athletesById = new Map();
 const athletesByNameKey = new Map();
 /** @type {Map<string, Record<string, any>>} */
 const athleteDetailsById = new Map();
+/** @type {Map<string, { direction: "lower"|"higher", scale: Array<{points:number,value:number}> }>} */
+const cotationsByCategoryEvent = new Map();
 
 competitionSelect.addEventListener("change", () => {
   selectedId = competitionSelect.value || null;
@@ -91,6 +93,7 @@ async function boot() {
     const [competitionsPayload] = await Promise.all([
       fetchJson("competitions.json", { competitions: [] }),
       loadAthletesIndex(),
+      loadCotations(),
     ]);
 
     fillAthleteSelect(athletesList);
@@ -177,6 +180,53 @@ async function loadAthletesIndex() {
   }
 }
 
+async function loadCotations() {
+  cotationsByCategoryEvent.clear();
+  try {
+    const urls = [
+      `${R2_ORIGIN}/cotations-jeunes.csv`,
+      `${R2_ORIGIN}/${R2_DATA_PREFIX}/cotations-jeunes.csv`,
+    ];
+    let response = null;
+    for (const url of urls) {
+      const candidate = await fetch(url, { cache: "no-store" });
+      if (candidate.ok) {
+        response = candidate;
+        break;
+      }
+    }
+    if (!response) throw new Error("CSV introuvable à la racine R2 ou dans data/");
+    const rows = parseSimpleCsv(await response.text());
+    const headers = rows.shift() || [];
+    const pointColumns = headers.slice(2).map(Number);
+
+    for (const row of rows) {
+      const category = String(row[0] || "").trim().toUpperCase();
+      const event = normalizeCotationEvent(row[1]);
+      if (!category || !event) continue;
+      const scale = pointColumns
+        .map((points, index) => ({ points, value: Number(row[index + 2]) }))
+        .filter((entry) => Number.isFinite(entry.points) && Number.isFinite(entry.value));
+      if (!scale.length) continue;
+      cotationsByCategoryEvent.set(`${category}:${event}`, {
+        direction: scale[0].value <= scale.at(-1).value ? "lower" : "higher",
+        scale,
+      });
+    }
+    console.info(`Cotations jeunes OK (${cotationsByCategoryEvent.size} épreuves)`);
+  } catch (error) {
+    console.warn("cotations-jeunes.csv indisponible", error);
+  }
+}
+
+function parseSimpleCsv(text) {
+  return String(text)
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n/)
+    .filter((line) => line.trim())
+    .map((line) => line.split(","));
+}
+
 function fillAthleteSelect(list) {
   if (!list.length) {
     athleteSelect.replaceChildren(new Option("Aucun athlète", ""));
@@ -255,13 +305,15 @@ function renderAthletePanel(athlete, fromDetail) {
   if (events.length) {
     athletePanelBodyEl.append(renderSectionTitle("Meilleures performances"));
     for (const entry of events) {
-      athletePanelBodyEl.append(renderAthleteEventCard(entry, false, { showSeasons: true }));
+      athletePanelBodyEl.append(
+        renderAthleteEventCard(entry, false, { showSeasons: true, athlete }),
+      );
     }
   }
 
   if (recent.length) {
     athletePanelBodyEl.append(renderSectionTitle("Résultats récents"));
-    athletePanelBodyEl.append(renderRecentResults(recent));
+    athletePanelBodyEl.append(renderRecentResults(recent, athlete));
   }
 
   if (!events.length && !recent.length) {
@@ -340,7 +392,7 @@ function renderAthleteFacts(athlete, fromDetail) {
   return wrap;
 }
 
-function renderRecentResults(results) {
+function renderRecentResults(results, athlete) {
   const list = document.createElement("div");
   list.className = "athlete-results";
   for (const row of results) {
@@ -370,8 +422,20 @@ function renderRecentResults(results) {
     }
 
     const perf = document.createElement("div");
-    perf.className = "athlete-result__perf";
-    perf.textContent = row.performance || "—";
+    perf.className = "athlete-result__performance";
+    perf.append(
+      Object.assign(document.createElement("div"), {
+        className: "athlete-result__perf",
+        textContent: row.performance || "—",
+      }),
+    );
+    const score = getPerformanceScore(
+      athlete,
+      row.event,
+      row.performance,
+      performanceYearFromRow(row, athlete),
+    );
+    if (score != null) perf.append(renderPerformanceIndicator(score));
 
     item.append(when, main, perf);
     list.append(item);
@@ -749,10 +813,17 @@ async function openAthleteDialog(lookupKey, eventName, fallbackName = "") {
     (entry) => !focusEvent || entry.event !== focusEvent.event,
   );
   if (focusEvent) {
-    athleteDialogBody.append(renderAthleteEventCard(focusEvent, true, { showSeasons: true }));
+    athleteDialogBody.append(
+      renderAthleteEventCard(focusEvent, true, { showSeasons: true, athlete: record }),
+    );
   }
   for (const entry of otherEvents) {
-    athleteDialogBody.append(renderAthleteEventCard(entry, false, { showSeasons: Boolean(detail) }));
+    athleteDialogBody.append(
+      renderAthleteEventCard(entry, false, {
+        showSeasons: Boolean(detail),
+        athlete: record,
+      }),
+    );
   }
   if (!focusEvent && !otherEvents.length) {
     athleteDialogBody.append(
@@ -775,8 +846,34 @@ function renderAthleteEventCard(entry, focused, options = {}) {
 
   const marks = document.createElement("div");
   marks.className = "athlete-best__marks";
-  if (entry.pb) marks.append(renderMarkChip("PB", entry.pb));
-  if (entry.sb) marks.append(renderMarkChip("SB", entry.sb));
+  if (entry.pb) {
+    marks.append(
+      renderMarkChip(
+        "PB",
+        entry.pb,
+        getPerformanceScore(
+          options.athlete,
+          entry.event,
+          entry.pb,
+          performanceYearForBest(entry, entry.pb),
+        ),
+      ),
+    );
+  }
+  if (entry.sb) {
+    marks.append(
+      renderMarkChip(
+        "SB",
+        entry.sb,
+        getPerformanceScore(
+          options.athlete,
+          entry.event,
+          entry.sb,
+          performanceYearForBest(entry, entry.sb),
+        ),
+      ),
+    );
+  }
   if (!marks.childElementCount) {
     const empty = document.createElement("p");
     empty.className = "athlete-dialog__empty";
@@ -791,14 +888,18 @@ function renderAthleteEventCard(entry, focused, options = {}) {
     seasons.className = "athlete-seasons";
     for (const row of entry.bySeason) {
       const item = document.createElement("li");
-      item.textContent = [
-        row.season,
-        row.performance,
-        row.date,
-        row.place,
-      ]
+      const text = document.createElement("span");
+      text.textContent = [row.season, row.performance, row.date, row.place]
         .filter(Boolean)
         .join(" · ");
+      item.append(text);
+      const score = getPerformanceScore(
+        options.athlete,
+        entry.event,
+        row.performance,
+        performanceYearFromRow(row, options.athlete),
+      );
+      if (score != null) item.append(renderPerformanceIndicator(score, true));
       seasons.append(item);
     }
     card.append(seasons);
@@ -807,13 +908,158 @@ function renderAthleteEventCard(entry, focused, options = {}) {
   return card;
 }
 
-function renderMarkChip(label, value) {
+function renderMarkChip(label, value, points = null) {
   const chip = document.createElement("div");
   chip.className = "athlete-best__mark";
   const tag = document.createElement("span");
   tag.textContent = label;
   chip.append(tag, document.createTextNode(value));
+  if (points != null) chip.append(renderPerformanceIndicator(points, true));
   return chip;
+}
+
+function getPerformanceScore(athlete, eventName, performance, performanceYear = null) {
+  const category = athleteCotationCategory(athlete, performanceYear);
+  const event = normalizeCotationEvent(eventName);
+  if (!category || !event || !performance) return null;
+  const cotation = cotationsByCategoryEvent.get(`${category}:${event}`);
+  if (!cotation) return null;
+
+  const value = parsePerformanceValue(performance, cotation.direction);
+  if (!Number.isFinite(value)) return null;
+  for (const threshold of cotation.scale) {
+    const reached =
+      cotation.direction === "lower"
+        ? value <= threshold.value
+        : value >= threshold.value;
+    if (reached) return { points: threshold.points, category };
+  }
+  return { points: 0, category };
+}
+
+function athleteCotationCategory(athlete, performanceYear = null) {
+  const code = String(athlete?.categoryCode || "").toUpperCase();
+  const sexFromCode = code.match(/[FM]$/)?.[0] || "";
+  const sex = sexFromCode || String(athlete?.sex || "").toUpperCase();
+  const birthYear = Number(athlete?.birthYear);
+  const year = Number(performanceYear);
+
+  if (
+    Number.isInteger(birthYear) &&
+    Number.isInteger(year) &&
+    /^[FM]$/.test(sex)
+  ) {
+    const age = year - birthYear;
+    if (age === 12 || age === 13) return `BE${sex}`;
+    if (age === 14 || age === 15) return `MI${sex}`;
+    // Pas de table dans ce CSV pour les poussins, cadets, etc.
+    return null;
+  }
+
+  if (/^(BEF|BEM|MIF|MIM)$/.test(code)) return code;
+  const youth = String(athlete?.youthCategory || "").toUpperCase();
+  if (youth === "U14" && /^[FM]$/.test(sex)) return `BE${sex}`;
+  if (youth === "U16" && /^[FM]$/.test(sex)) return `MI${sex}`;
+  return null;
+}
+
+function performanceYearForBest(entry, performance) {
+  const target = normalizePerformanceMark(performance);
+  const years = (entry?.bySeason || [])
+    .filter((row) => normalizePerformanceMark(row.performance) === target)
+    .map((row) => Number(row.season))
+    .filter(Number.isInteger);
+  return years.length ? Math.max(...years) : null;
+}
+
+function performanceYearFromRow(row, athlete) {
+  const season = Number(row?.season);
+  if (Number.isInteger(season)) return season;
+  const yearInDate = String(row?.date || "").match(/\b(20\d{2})\b/);
+  if (yearInDate) return Number(yearInDate[1]);
+  const fetchedYear = String(athlete?.fetchedAt || "").match(/^(20\d{2})/);
+  return fetchedYear ? Number(fetchedYear[1]) : new Date().getFullYear();
+}
+
+function normalizePerformanceMark(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[’′]/g, "'")
+    .replace(/[”″]/g, '"')
+    .replace(/\s+/g, "")
+    .trim();
+}
+
+function normalizeCotationEvent(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s*\/\s*(?:bef|bem|mif|mim)\b/g, "")
+    .replace(/\((?:19|20)\d{2}\)/g, "")
+    .replace(/\([^)]*\)/g, "")
+    .replace(/\b(?:piste courte|salle)\b/g, "")
+    .replace(/[-–—]/g, " ")
+    .replace(/\s+/g, "")
+    .replace(/^(\d)000m/, "$1000m")
+    .replace(/^4x60metres?$/, "4x60m")
+    .trim();
+}
+
+function parsePerformanceValue(raw, direction) {
+  const text = String(raw || "")
+    .trim()
+    .replace(/\s+/g, "")
+    .replace(/,/g, ".")
+    .replace(/[’′]/g, "'")
+    .replace(/[”″]/g, '"');
+
+  if (direction === "higher") {
+    const metric = text.match(/(\d+)(?:m|\.)(\d{1,2})/i);
+    if (metric) return Number(metric[1]) + Number(metric[2].padEnd(2, "0")) / 100;
+    const number = text.match(/\d+(?:\.\d+)?/);
+    return number ? Number(number[0]) : NaN;
+  }
+
+  const minutes = text.match(/(\d+)'(\d{1,2})(?:"|'{1,2})(\d{1,2})?/);
+  if (minutes) {
+    return (
+      Number(minutes[1]) * 60 +
+      Number(minutes[2]) +
+      Number((minutes[3] || "0").padEnd(2, "0")) / 100
+    );
+  }
+  const seconds = text.match(/(\d+)(?:"|'{2})(\d{1,2})?/);
+  if (seconds) {
+    return Number(seconds[1]) + Number((seconds[2] || "0").padEnd(2, "0")) / 100;
+  }
+  const number = text.match(/\d+(?:\.\d+)?/);
+  return number ? Number(number[0]) : NaN;
+}
+
+function renderPerformanceIndicator(result, compact = false) {
+  const points = typeof result === "object" ? result.points : result;
+  const category = typeof result === "object" ? result.category : null;
+  const score = Math.max(0, Math.min(50, Number(points) || 0));
+  const indicator = document.createElement("div");
+  indicator.className = compact
+    ? "performance-score performance-score--compact"
+    : "performance-score";
+  indicator.style.setProperty("--score", String(score));
+  indicator.style.setProperty("--score-color", `hsl(${Math.round(5 + score * 2.5)} 72% 42%)`);
+  indicator.title = `${score} point${score > 1 ? "s" : ""} sur 50${
+    category ? ` · barème ${category}` : ""
+  }`;
+  indicator.setAttribute("aria-label", indicator.title);
+
+  const bar = document.createElement("span");
+  bar.className = "performance-score__bar";
+  bar.append(Object.assign(document.createElement("i"), { ariaHidden: "true" }));
+  const label = document.createElement("strong");
+  label.textContent = `${score} pts`;
+  indicator.append(bar, label);
+  return indicator;
 }
 
 function uniqueSeries(athletes) {

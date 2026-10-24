@@ -133,7 +133,7 @@ function r2DownloadJson(relativeFilename) {
  */
 function r2DownloadJsonByObjectKey(objectKey) {
   var cfg = r2GetConfig();
-  var response = UrlFetchApp.fetch(r2ObjectUrl(objectKey), {
+  var response = r2FetchWithRetry(r2ObjectUrl(objectKey), {
     method: 'get',
     muteHttpExceptions: true,
     headers: {
@@ -181,7 +181,7 @@ function r2ListObjectKeys(prefixOverride) {
     if (listPrefix) url += '&prefix=' + encodeURIComponent(listPrefix);
     if (cursor) url += '&cursor=' + encodeURIComponent(cursor);
 
-    var response = UrlFetchApp.fetch(url, {
+    var response = r2FetchWithRetry(url, {
       method: 'get',
       muteHttpExceptions: true,
       headers: {

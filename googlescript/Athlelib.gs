@@ -635,6 +635,25 @@ function athleYouthCategoryFromBilansCode(code) {
   return null;
 }
 
+/** Catégorie U14/U16 correspondant à l’année de naissance pour une saison donnée. */
+function athleYouthCategoryFromBirthYear(birthYear, seasonYear) {
+  var birth = Number(birthYear);
+  var season = Number(seasonYear);
+  if (!birth || !season) return null;
+  var age = season - birth;
+  if (age === 12 || age === 13) return 'U14';
+  if (age === 14 || age === 15) return 'U16';
+  return null;
+}
+
+/** Code courant BEF/BEM/MIF/MIM à partir de la naissance et du sexe. */
+function athleCategoryCodeFromBirthYear(birthYear, sex, seasonYear) {
+  var youth = athleYouthCategoryFromBirthYear(birthYear, seasonYear);
+  var normalizedSex = String(sex || '').toUpperCase();
+  if (!youth || (normalizedSex !== 'F' && normalizedSex !== 'M')) return null;
+  return (youth === 'U14' ? 'BE' : 'MI') + normalizedSex;
+}
+
 /**
  * Catégories jeunes autorisées (YOUTH_CATEGORIES).
  * [] / null / undefined → pas de filtre.
@@ -815,12 +834,14 @@ function athleGetClubYouthAthletes(options) {
         byId[row.athleteId] = {
           athleteId: row.athleteId,
           name: row.name,
+          birthYear: parsedCat.birthYear,
           categoryCode: parsedCat.code,
           youthCategory: parsedCat.youthCategory,
           events: [],
         };
       } else {
         if (!current.name && row.name) current.name = row.name;
+        if (!current.birthYear && parsedCat.birthYear) current.birthYear = parsedCat.birthYear;
         if (parsedCat.code) current.categoryCode = parsedCat.code;
         if (parsedCat.youthCategory) current.youthCategory = parsedCat.youthCategory;
       }
@@ -899,6 +920,8 @@ function athleGetClubYouthAthletes(options) {
 function athleMergeAthletesFromCompetitionDetails(byId) {
   var keys = r2ListObjectKeys();
   var added = 0;
+  var skippedNoLongerYouth = 0;
+  var currentYear = athleBilansYear();
   for (var i = 0; i < keys.length; i++) {
     var name = athleR2RelativeName(keys[i]);
     if (!/^\d{4}-\d{2}-\d{2}_.+\.json$/i.test(name)) continue;
@@ -918,25 +941,46 @@ function athleMergeAthletesFromCompetitionDetails(byId) {
         var athleteId = part.athleteId ? String(part.athleteId) : '';
         if (!athleteId) continue;
         var parsedCat = athleParseBilansAthleteCategory(part.category || '');
-        if (!athleIsAllowedYouthCategory(parsedCat.youthCategory)) continue;
+        var currentYouth = athleYouthCategoryFromBirthYear(parsedCat.birthYear, currentYear);
+        var currentCode = athleCategoryCodeFromBirthYear(
+          parsedCat.birthYear,
+          parsedCat.sex,
+          currentYear,
+        );
+        // La catégorie de la compétition peut être historique : on teste la catégorie actuelle.
+        if (!athleIsAllowedYouthCategory(currentYouth)) {
+          skippedNoLongerYouth += 1;
+          continue;
+        }
         if (byId[athleteId]) {
           if (!byId[athleteId].name && part.athleteName) byId[athleteId].name = part.athleteName;
-          if (!byId[athleteId].categoryCode && parsedCat.code) {
-            byId[athleteId].categoryCode = parsedCat.code;
-            byId[athleteId].youthCategory = parsedCat.youthCategory;
+          if (!byId[athleteId].birthYear && parsedCat.birthYear) {
+            byId[athleteId].birthYear = parsedCat.birthYear;
+          }
+          if (!byId[athleteId].categoryCode && currentCode) {
+            byId[athleteId].categoryCode = currentCode;
+            byId[athleteId].youthCategory = currentYouth;
           }
           continue;
         }
         byId[athleteId] = {
           athleteId: athleteId,
           name: part.athleteName || athleteId,
-          categoryCode: parsedCat.code,
-          youthCategory: parsedCat.youthCategory,
+          birthYear: parsedCat.birthYear,
+          categoryCode: currentCode,
+          youthCategory: currentYouth,
           events: [],
         };
         added += 1;
       }
     }
+  }
+  if (skippedNoLongerYouth) {
+    Logger.log(
+      'Participants de compétitions hors U14/U16 en %s ignorés : %s',
+      currentYear,
+      skippedNoLongerYouth,
+    );
   }
   return added;
 }
@@ -951,11 +995,11 @@ function athleBuildAthleteProfileUrl(athleteId) {
 function athleEnrichAthleteFromProfile(athlete) {
   var html = athleFetchHtml(athleBuildAthleteProfileUrl(athlete.athleteId));
   var identity = athleParseAthleteProfileIdentity(html);
+  if (identity.birthYear) athlete.birthYear = identity.birthYear;
   if (identity.categoryCode) {
-    if (!athlete.categoryCode) athlete.categoryCode = identity.categoryCode;
-    if (!athlete.youthCategory) {
-      athlete.youthCategory = athleYouthCategoryFromBilansCode(identity.categoryCode);
-    }
+    // La fiche profil donne la catégorie actuelle et corrige les données historiques.
+    athlete.categoryCode = identity.categoryCode;
+    athlete.youthCategory = athleYouthCategoryFromBilansCode(identity.categoryCode);
   }
   athlete.events = athleParseAthleteSeasonBests(html, { detailed: false });
   return athlete;
@@ -981,7 +1025,7 @@ function athleFetchAthleteFullDetail(athleteId, seed) {
     name: identity.displayName || seed.name || id,
     profileUrl: profileUrl,
     fetchedAt: new Date().toISOString(),
-    birthYear: identity.birthYear,
+    birthYear: identity.birthYear || seed.birthYear || null,
     licence: identity.licence,
     sex: identity.sex || null,
     categoryCode: categoryCode,
@@ -1002,6 +1046,7 @@ function athleCompactAthleteFromDetail(detail) {
   return {
     athleteId: detail.athleteId,
     name: detail.name,
+    birthYear: detail.birthYear || null,
     categoryCode: detail.categoryCode,
     youthCategory: detail.youthCategory,
     events: (detail.events || []).map(function (entry) {
