@@ -1265,8 +1265,14 @@ function performanceYearFromRow(row, athlete) {
   if (Number.isInteger(season)) return season;
   const yearInDate = String(row?.date || "").match(/\b(20\d{2})\b/);
   if (yearInDate) return Number(yearInDate[1]);
-  const fetchedYear = String(athlete?.fetchedAt || "").match(/^(20\d{2})/);
-  return fetchedYear ? Number(fetchedYear[1]) : new Date().getFullYear();
+  const fetchedAt = String(athlete?.fetchedAt || "");
+  const fetchedDate = fetchedAt.match(/^(20\d{2})-(\d{2})/);
+  if (fetchedDate) {
+    const year = Number(fetchedDate[1]);
+    return Number(fetchedDate[2]) >= 9 ? year + 1 : year;
+  }
+  const now = new Date();
+  return now.getMonth() >= 8 ? now.getFullYear() + 1 : now.getFullYear();
 }
 
 function normalizePerformanceMark(value) {

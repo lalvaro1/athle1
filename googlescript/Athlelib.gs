@@ -606,7 +606,11 @@ function athleBilansYear() {
     typeof ATHLE_CONFIG !== 'undefined' && ATHLE_CONFIG.TIMEZONE
       ? ATHLE_CONFIG.TIMEZONE
       : 'Europe/Paris';
-  return Number(Utilities.formatDate(new Date(), tz, 'yyyy'));
+  var now = new Date();
+  var year = Number(Utilities.formatDate(now, tz, 'yyyy'));
+  var month = Number(Utilities.formatDate(now, tz, 'MM'));
+  // La saison FFA N débute en septembre N-1.
+  return month >= 9 ? year + 1 : year;
 }
 
 /** Année mini des perfs conservées (N - ATHLETE_PERF_MIN_YEAR_OFFSET). */
@@ -652,6 +656,29 @@ function athleCategoryCodeFromBirthYear(birthYear, sex, seasonYear) {
   var normalizedSex = String(sex || '').toUpperCase();
   if (!youth || (normalizedSex !== 'F' && normalizedSex !== 'M')) return null;
   return (youth === 'U14' ? 'BE' : 'MI') + normalizedSex;
+}
+
+/**
+ * Recompose le code complet lorsque la fiche fournit catégorie et sexe séparément
+ * (ex. MI + M → MIM). Le code seed sert de secours.
+ */
+function athleCategoryCodeWithSex(code, sex, seedCode) {
+  var normalized = String(code || '')
+    .toUpperCase()
+    .replace(/[^A-Z]/g, '');
+  var normalizedSex = String(sex || '').toUpperCase();
+  var seed = String(seedCode || '')
+    .toUpperCase()
+    .replace(/[^A-Z]/g, '');
+  if (/^(BEF|BEM|MIF|MIM)$/.test(normalized)) return normalized;
+  if (normalizedSex !== 'F' && normalizedSex !== 'M') {
+    var seedSex = seed.match(/[FM]$/);
+    normalizedSex = seedSex ? seedSex[0] : '';
+  }
+  if (/^(BE|MI)$/.test(normalized) && (normalizedSex === 'F' || normalizedSex === 'M')) {
+    return normalized + normalizedSex;
+  }
+  return normalized || seed || null;
 }
 
 /**
@@ -1016,7 +1043,11 @@ function athleFetchAthleteFullDetail(athleteId, seed) {
   var profileUrl = athleBuildAthleteProfileUrl(id);
   var html = athleFetchHtml(profileUrl);
   var identity = athleParseAthleteProfileIdentity(html);
-  var categoryCode = identity.categoryCode || seed.categoryCode || null;
+  var categoryCode = athleCategoryCodeWithSex(
+    identity.categoryCode,
+    identity.sex,
+    seed.categoryCode,
+  );
   var youthCategory =
     athleYouthCategoryFromBilansCode(categoryCode) || seed.youthCategory || null;
 
@@ -1066,13 +1097,16 @@ function athleParseAthleteProfileIdentity(html) {
     /Catégorie\s*\/\s*Nationalité\s*:\s*<\/span>\s*([A-Za-z]{1,4})\s*(?:<span[^>]*>\s*\/\s*<\/span>\s*([A-Za-z]))?/i,
   );
   var sex = cat && cat[2] ? String(cat[2]).toUpperCase() : null;
+  var categoryCode = cat
+    ? athleCategoryCodeWithSex(String(cat[1]).toUpperCase(), sex, null)
+    : null;
   var nameMatch = html.match(/<h2[^>]*>([\s\S]*?)<\/h2>/i);
   return {
     displayName: nameMatch ? athleStripHtml(nameMatch[1]) : null,
     birthYear: birth ? Number(birth[1]) : null,
     clubName: club ? athleStripHtml(club[1]) : null,
     licence: licence ? athleStripHtml(licence[1]) : null,
-    categoryCode: cat ? String(cat[1]).toUpperCase() : null,
+    categoryCode: categoryCode,
     sex: sex === 'F' || sex === 'M' ? sex : null,
   };
 }

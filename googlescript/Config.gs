@@ -28,7 +28,8 @@ var ATHLE_CONFIG = {
   BILANS_YOUTH_CATEGORIES: ['BE', 'MI'],
 
   /**
-   * Année des bilans (frmannee). null = année civile courante (TIMEZONE).
+   * Saison des bilans (frmannee). null = saison FFA courante
+   * (bascule vers N+1 à partir de septembre).
    */
   BILANS_YEAR: null,
 
