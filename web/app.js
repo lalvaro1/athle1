@@ -22,14 +22,27 @@ const athleteDialogBody = document.querySelector("#athlete-dialog-body");
 const tabButtons = [...document.querySelectorAll(".tabs__btn")];
 const tabCompetitions = document.querySelector("#tab-competitions");
 const tabAthletes = document.querySelector("#tab-athletes");
+const tabEvents = document.querySelector("#tab-events");
+const eventSelect = document.querySelector("#event-select");
+const eventStatusEl = document.querySelector("#event-status");
+const eventPanelEl = document.querySelector("#event-panel");
+const eventPanelTitleEl = document.querySelector("#event-panel-title");
+const eventPanelCountEl = document.querySelector("#event-panel-count");
+const eventPanelBodyEl = document.querySelector("#event-panel-body");
+const athleteFilterButtons = [...document.querySelectorAll("[data-athlete-filter]")];
+const eventFilterButtons = [...document.querySelectorAll("[data-event-filter]")];
 
 /** Scroll Y figé pendant l’ouverture de la modale (iOS). */
 let dialogScrollLockY = 0;
 
 const params = new URLSearchParams(location.search);
-let activeTab = params.get("tab") === "athletes" ? "athletes" : "competitions";
+let activeTab = ["athletes", "events"].includes(params.get("tab"))
+  ? params.get("tab")
+  : "competitions";
 let selectedId = params.get("competition");
 let selectedAthleteId = params.get("athlete");
+let selectedEventKey = params.get("event");
+let eventRankingRequestId = 0;
 /** @type {Array<Record<string, any>>} */
 let competitions = [];
 /** @type {Array<Record<string, any>>} */
@@ -42,6 +55,8 @@ const athletesByNameKey = new Map();
 const athleteDetailsById = new Map();
 /** @type {Map<string, { direction: "lower"|"higher", scale: Array<{points:number,value:number}> }>} */
 const cotationsByCategoryEvent = new Map();
+const athleteFilters = { sex: "all", youth: "all" };
+const eventFilters = { sex: "all", youth: "all" };
 
 competitionSelect.addEventListener("change", () => {
   selectedId = competitionSelect.value || null;
@@ -60,8 +75,33 @@ athleteSelect.addEventListener("change", () => {
   }
 });
 
+eventSelect.addEventListener("change", () => {
+  selectedEventKey = eventSelect.value || null;
+  syncUrl();
+  if (selectedEventKey) showEventRanking(selectedEventKey);
+  else eventPanelEl.hidden = true;
+});
+
+for (const button of athleteFilterButtons) {
+  button.addEventListener("click", () => {
+    setPickerFilter(athleteFilters, athleteFilterButtons, button);
+    refreshAthletePicker();
+  });
+}
+
+for (const button of eventFilterButtons) {
+  button.addEventListener("click", () => {
+    setPickerFilter(eventFilters, eventFilterButtons, button);
+    refreshEventPicker();
+  });
+}
+
 for (const button of tabButtons) {
-  button.addEventListener("click", () => setActiveTab(button.dataset.tab || "competitions"));
+  button.addEventListener("click", () => {
+    const tab = button.dataset.tab || "competitions";
+    setActiveTab(tab);
+    if (tab === "events" && selectedEventKey) showEventRanking(selectedEventKey);
+  });
 }
 
 if (athleteDialog) {
@@ -97,6 +137,8 @@ async function boot() {
     ]);
 
     fillAthleteSelect(athletesList);
+    const eventOptions = buildEventOptions(athletesList);
+    fillEventSelect(eventOptions);
 
     competitions = sortCompetitionsNewestFirst(competitionsPayload.competitions || []);
     if (!competitions.length) {
@@ -125,6 +167,14 @@ async function boot() {
       await showAthletePanelById(selectedAthleteId);
     }
 
+    if (eventOptions.length) {
+      const selected =
+        eventOptions.find((entry) => entry.key === selectedEventKey) || eventOptions[0];
+      selectedEventKey = selected.key;
+      eventSelect.value = selectedEventKey;
+      if (activeTab === "events") await showEventRanking(selectedEventKey);
+    }
+
     syncUrl();
   } catch (error) {
     competitionSelect.replaceChildren(new Option("Chargement impossible", ""));
@@ -133,15 +183,20 @@ async function boot() {
     athleteSelect.replaceChildren(new Option("Chargement impossible", ""));
     athleteSelect.disabled = true;
     athleteStatusEl.textContent = "Chargement impossible";
+    eventSelect.replaceChildren(new Option("Chargement impossible", ""));
+    eventSelect.disabled = true;
+    eventStatusEl.textContent = "Chargement impossible";
     console.error(error);
   }
 }
 
 function setActiveTab(tab, { skipUrl = false } = {}) {
-  activeTab = tab === "athletes" ? "athletes" : "competitions";
+  activeTab = ["athletes", "events"].includes(tab) ? tab : "competitions";
   const showAthletes = activeTab === "athletes";
-  tabCompetitions.hidden = showAthletes;
+  const showEvents = activeTab === "events";
+  tabCompetitions.hidden = showAthletes || showEvents;
   tabAthletes.hidden = !showAthletes;
+  tabEvents.hidden = !showEvents;
   for (const button of tabButtons) {
     const on = button.dataset.tab === activeTab;
     button.classList.toggle("is-active", on);
@@ -250,6 +305,238 @@ function fillAthleteSelect(list) {
   athleteStatusEl.textContent = list.length === 1 ? "1 athlète" : `${list.length} athlètes`;
 }
 
+function setPickerFilter(state, buttons, selectedButton) {
+  const key =
+    selectedButton.dataset.athleteFilter || selectedButton.dataset.eventFilter;
+  if (!key) return;
+  state[key] = selectedButton.dataset.value || "all";
+  for (const button of buttons) {
+    const buttonKey = button.dataset.athleteFilter || button.dataset.eventFilter;
+    if (buttonKey !== key) continue;
+    const active = button === selectedButton;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  }
+}
+
+function athleteSex(athlete) {
+  const fromCode = String(athlete?.categoryCode || "").toUpperCase().match(/[FM]$/);
+  return fromCode?.[0] || String(athlete?.sex || "").toUpperCase();
+}
+
+function athleteYouthCategory(athlete) {
+  const youth = String(athlete?.youthCategory || "").toUpperCase();
+  if (youth === "U14" || youth === "U16") return youth;
+  const code = String(athlete?.categoryCode || "").toUpperCase();
+  if (code.startsWith("BE")) return "U14";
+  if (code.startsWith("MI")) return "U16";
+  return "";
+}
+
+function athleteMatchesFilters(athlete, filters) {
+  return (
+    (filters.sex === "all" || athleteSex(athlete) === filters.sex) &&
+    (filters.youth === "all" || athleteYouthCategory(athlete) === filters.youth)
+  );
+}
+
+function refreshAthletePicker() {
+  const filtered = athletesList.filter((athlete) =>
+    athleteMatchesFilters(athlete, athleteFilters),
+  );
+  fillAthleteSelect(filtered);
+  if (!filtered.length) {
+    selectedAthleteId = null;
+    athletePanelEl.hidden = true;
+    athletePanelBodyEl.replaceChildren();
+    syncUrl();
+    return;
+  }
+  const selected =
+    filtered.find((athlete) => String(athlete.athleteId) === String(selectedAthleteId)) ||
+    filtered[0];
+  selectedAthleteId = String(selected.athleteId);
+  athleteSelect.value = selectedAthleteId;
+  showAthletePanelById(selectedAthleteId);
+  syncUrl();
+}
+
+function refreshEventPicker() {
+  const filteredAthletes = athletesList.filter((athlete) =>
+    athleteMatchesFilters(athlete, eventFilters),
+  );
+  const options = buildEventOptions(filteredAthletes);
+  fillEventSelect(options);
+  if (!options.length) {
+    selectedEventKey = null;
+    eventPanelEl.hidden = true;
+    eventPanelBodyEl.replaceChildren();
+    syncUrl();
+    return;
+  }
+  const selected = options.find((entry) => entry.key === selectedEventKey) || options[0];
+  selectedEventKey = selected.key;
+  eventSelect.value = selectedEventKey;
+  if (activeTab === "events") showEventRanking(selectedEventKey);
+  syncUrl();
+}
+
+function buildEventOptions(athletes) {
+  const byKey = new Map();
+  for (const athlete of athletes) {
+    for (const entry of athlete.events || []) {
+      const key = normalizeCotationEvent(entry.event);
+      if (!key) continue;
+      const label = eventDisplayName(entry.event);
+      const current = byKey.get(key);
+      if (!current || label.length < current.label.length) byKey.set(key, { key, label });
+    }
+  }
+  return [...byKey.values()].sort((a, b) =>
+    a.label.localeCompare(b.label, "fr", { numeric: true }),
+  );
+}
+
+function eventDisplayName(value) {
+  return String(value || "")
+    .replace(/\s*\/\s*(?:BEF|BEM|MIF|MIM)\b/gi, "")
+    .replace(/\((?:19|20)\d{2}\)/g, "")
+    .replace(/\b(?:Piste Courte|Salle)\b/gi, "")
+    .replace(/\s*-\s*$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function fillEventSelect(options) {
+  if (!options.length) {
+    eventSelect.replaceChildren(new Option("Aucune épreuve", ""));
+    eventSelect.disabled = true;
+    eventStatusEl.textContent = "0 épreuve";
+    return;
+  }
+  eventSelect.replaceChildren(
+    ...options.map((entry) => new Option(entry.label, entry.key)),
+  );
+  eventSelect.disabled = false;
+  eventStatusEl.textContent =
+    options.length === 1 ? "1 épreuve" : `${options.length} épreuves`;
+}
+
+async function showEventRanking(eventKey) {
+  const requestId = ++eventRankingRequestId;
+  const candidates = athletesList.filter(
+    (athlete) =>
+      athleteMatchesFilters(athlete, eventFilters) &&
+      (athlete.events || []).some(
+        (entry) => normalizeCotationEvent(entry.event) === eventKey,
+      ),
+  );
+  const label =
+    [...eventSelect.options].find((option) => option.value === eventKey)?.textContent ||
+    "Épreuve";
+
+  eventPanelEl.hidden = false;
+  eventPanelTitleEl.textContent = label;
+  eventPanelCountEl.textContent = "…";
+  eventPanelBodyEl.replaceChildren(message("Chargement du classement…"));
+
+  const records = await Promise.all(
+    candidates.map(async (summary) => (await loadAthleteDetail(summary.athleteId)) || summary),
+  );
+  if (requestId !== eventRankingRequestId || eventKey !== selectedEventKey) return;
+
+  const ranking = records
+    .map((athlete) => buildEventRankingEntry(athlete, eventKey))
+    .filter(Boolean)
+    .sort(compareEventRankingEntries);
+
+  eventPanelCountEl.textContent =
+    ranking.length === 1 ? "1 athlète" : `${ranking.length} athlètes`;
+  eventPanelBodyEl.replaceChildren();
+  if (!ranking.length) {
+    eventPanelBodyEl.append(message("Aucune performance disponible."));
+    return;
+  }
+
+  ranking.forEach((row, index) => {
+    eventPanelBodyEl.append(renderEventRankingRow(row, index + 1, label));
+  });
+}
+
+function buildEventRankingEntry(athlete, eventKey) {
+  const entries = (athlete.events || []).filter(
+    (entry) => normalizeCotationEvent(entry.event) === eventKey && entry.pb,
+  );
+  if (!entries.length) return null;
+
+  const scored = entries.map((entry) => {
+    const year = performanceYearForBest(entry, entry.pb);
+    const score = getPerformanceScore(athlete, entry.event, entry.pb, year);
+    const category = score?.category || athleteCotationCategory(athlete, year);
+    const cotation = category
+      ? cotationsByCategoryEvent.get(`${category}:${eventKey}`)
+      : null;
+    return {
+      athlete,
+      event: entry.event,
+      performance: entry.pb,
+      year,
+      score,
+      direction: cotation?.direction || null,
+      value: cotation ? parsePerformanceValue(entry.pb, cotation.direction) : NaN,
+    };
+  });
+  scored.sort(compareEventRankingEntries);
+  return scored[0];
+}
+
+function compareEventRankingEntries(a, b) {
+  const pointsA = a.score?.points ?? -1;
+  const pointsB = b.score?.points ?? -1;
+  if (pointsA !== pointsB) return pointsB - pointsA;
+  if (Number.isFinite(a.value) && Number.isFinite(b.value) && a.value !== b.value) {
+    return a.direction === "higher" ? b.value - a.value : a.value - b.value;
+  }
+  return formatAthleteName(a.athlete.name).localeCompare(
+    formatAthleteName(b.athlete.name),
+    "fr",
+  );
+}
+
+function renderEventRankingRow(row, rank, eventLabel) {
+  const item = document.createElement("article");
+  item.className = "event-ranking__row";
+
+  const rankEl = document.createElement("span");
+  rankEl.className = "event-ranking__rank";
+  rankEl.textContent = String(rank);
+
+  const identity = document.createElement("div");
+  identity.className = "event-ranking__identity";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "event-ranking__athlete";
+  button.textContent = formatAthleteName(row.athlete.name);
+  button.addEventListener("click", () =>
+    openAthleteDialog(
+      `id:${row.athlete.athleteId}`,
+      row.event || eventLabel,
+      row.athlete.name,
+    ),
+  );
+  const meta = document.createElement("span");
+  meta.textContent = [row.score?.category, row.year].filter(Boolean).join(" · ");
+  identity.append(button, meta);
+
+  const performance = document.createElement("strong");
+  performance.className = "event-ranking__performance";
+  performance.textContent = row.performance;
+
+  item.append(rankEl, identity, performance);
+  if (row.score) item.append(renderPerformanceIndicator(row.score));
+  return item;
+}
+
 async function showAthletePanelById(athleteId) {
   const id = String(athleteId || "");
   const summary = athletesById.get(id);
@@ -271,6 +558,7 @@ async function showAthletePanelById(athleteId) {
   );
 
   const detail = await loadAthleteDetail(id);
+  if (id !== String(selectedAthleteId || "")) return;
   const athlete = detail || summary;
   renderAthletePanel(athlete, Boolean(detail));
 }
@@ -1140,9 +1428,10 @@ function dataUrl(objectKey) {
 
 function syncUrl() {
   const next = new URLSearchParams();
-  if (activeTab === "athletes") next.set("tab", "athletes");
+  if (activeTab !== "competitions") next.set("tab", activeTab);
   if (selectedId) next.set("competition", selectedId);
   if (selectedAthleteId) next.set("athlete", selectedAthleteId);
+  if (selectedEventKey) next.set("event", selectedEventKey);
   const query = next.toString();
   history.replaceState(null, "", query ? `?${query}` : location.pathname);
 }

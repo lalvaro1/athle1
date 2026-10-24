@@ -63,6 +63,17 @@
           >
             Athlètes
           </button>
+          <button
+            type="button"
+            class="tabs__btn"
+            role="tab"
+            id="tab-btn-events"
+            aria-selected="false"
+            aria-controls="tab-events"
+            data-tab="events"
+          >
+            Épreuves
+          </button>
         </div>
 
         <div
@@ -108,6 +119,24 @@
                 <option value="">Chargement…</option>
               </select>
             </label>
+            <div class="picker-filters" aria-label="Filtres des athlètes">
+              <div class="picker-filter">
+                <span>Sexe</span>
+                <div class="filter-buttons">
+                  <button type="button" class="is-active" data-athlete-filter="sex" data-value="all" aria-pressed="true">Tous</button>
+                  <button type="button" data-athlete-filter="sex" data-value="F" aria-pressed="false">Filles</button>
+                  <button type="button" data-athlete-filter="sex" data-value="M" aria-pressed="false">Garçons</button>
+                </div>
+              </div>
+              <div class="picker-filter">
+                <span>Catégorie</span>
+                <div class="filter-buttons">
+                  <button type="button" class="is-active" data-athlete-filter="youth" data-value="all" aria-pressed="true">Tous</button>
+                  <button type="button" data-athlete-filter="youth" data-value="U14" aria-pressed="false">Benjamins</button>
+                  <button type="button" data-athlete-filter="youth" data-value="U16" aria-pressed="false">Minimes</button>
+                </div>
+              </div>
+            </div>
             <p id="athlete-status" class="status" role="status"></p>
           </section>
 
@@ -126,6 +155,59 @@
               <p id="athlete-panel-count" class="planning__meta"></p>
             </header>
             <div id="athlete-panel-body" class="athlete-panel__body"></div>
+          </section>
+        </div>
+
+        <div
+          id="tab-events"
+          class="tab-panel"
+          role="tabpanel"
+          aria-labelledby="tab-btn-events"
+          hidden
+        >
+          <section class="block picker-block" aria-labelledby="event-label">
+            <label class="comp-picker" for="event-select">
+              <span id="event-label">Épreuve</span>
+              <select id="event-select" disabled>
+                <option value="">Chargement…</option>
+              </select>
+            </label>
+            <div class="picker-filters" aria-label="Filtres du classement">
+              <div class="picker-filter">
+                <span>Sexe</span>
+                <div class="filter-buttons">
+                  <button type="button" class="is-active" data-event-filter="sex" data-value="all" aria-pressed="true">Tous</button>
+                  <button type="button" data-event-filter="sex" data-value="F" aria-pressed="false">Filles</button>
+                  <button type="button" data-event-filter="sex" data-value="M" aria-pressed="false">Garçons</button>
+                </div>
+              </div>
+              <div class="picker-filter">
+                <span>Catégorie</span>
+                <div class="filter-buttons">
+                  <button type="button" class="is-active" data-event-filter="youth" data-value="all" aria-pressed="true">Tous</button>
+                  <button type="button" data-event-filter="youth" data-value="U14" aria-pressed="false">Benjamins</button>
+                  <button type="button" data-event-filter="youth" data-value="U16" aria-pressed="false">Minimes</button>
+                </div>
+              </div>
+            </div>
+            <p id="event-status" class="status" role="status"></p>
+          </section>
+
+          <section
+            id="event-panel"
+            class="block planning"
+            hidden
+            aria-labelledby="event-panel-title"
+          >
+            <header class="planning__head">
+              <div class="planning__intro">
+                <p class="eyebrow">Classement club</p>
+                <h2 id="event-panel-title">Épreuve</h2>
+                <p class="place">Classement selon les meilleures performances enregistrées</p>
+              </div>
+              <p id="event-panel-count" class="planning__meta"></p>
+            </header>
+            <div id="event-panel-body" class="event-ranking"></div>
           </section>
         </div>
       </main>
