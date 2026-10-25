@@ -49,7 +49,10 @@
 
           <div class="picker-filters virtual-team__filters" aria-label="Filtres des athlètes">
             <fieldset class="picker-filter">
-              <legend>Catégorie</legend>
+              <legend class="sr-only">Catégorie</legend>
+              <div class="picker-filter__head">
+                <span>Catégorie</span>
+              </div>
               <div class="filter-buttons">
                 <label>
                   <input type="radio" name="virtual-category" value="U14" checked />
@@ -63,16 +66,24 @@
             </fieldset>
 
             <fieldset class="picker-filter">
-              <legend>Règles</legend>
-              <div class="filter-buttons">
-                <label>
-                  <input type="radio" name="virtual-rules" value="N1" checked />
-                  <span>N1</span>
-                </label>
-                <label>
-                  <input type="radio" name="virtual-rules" value="N2" />
-                  <span>N2</span>
-                </label>
+              <legend class="sr-only">Règles</legend>
+              <div class="picker-filter__head">
+                <span>Règles</span>
+              </div>
+              <div class="rules-filter__controls">
+                <div class="filter-buttons">
+                  <label>
+                    <input type="radio" name="virtual-rules" value="N1" checked />
+                    <span>N1</span>
+                  </label>
+                  <label>
+                    <input type="radio" name="virtual-rules" value="N2" />
+                    <span>N2</span>
+                  </label>
+                </div>
+                <button id="show-rules" class="rules-link" type="button">
+                  Voir l’algorithme
+                </button>
               </div>
             </fieldset>
           </div>
@@ -91,7 +102,12 @@
                 Recherche de la meilleure composition N1.
               </p>
             </div>
-            <p id="virtual-team-score" class="planning__meta">…</p>
+            <div class="virtual-team__score-row">
+              <p id="virtual-team-score" class="planning__meta">…</p>
+              <button id="virtual-team-reset" class="virtual-team-reset" type="button">
+                Reset
+              </button>
+            </div>
           </header>
           <div id="virtual-team-events" class="virtual-team-events" aria-live="polite"></div>
         </section>
@@ -102,6 +118,136 @@
         <a href="index.html">Agenda Team Sharky</a>
       </footer>
     </div>
+
+    <dialog
+      id="replace-dialog"
+      class="athlete-dialog replace-dialog"
+      aria-labelledby="replace-dialog-title"
+    >
+      <form method="dialog" class="athlete-dialog__panel">
+        <header class="athlete-dialog__head">
+          <div>
+            <p class="eyebrow">Remplacer</p>
+            <h2 id="replace-dialog-title">Choisir un athlète</h2>
+            <p id="replace-dialog-meta" class="place"></p>
+          </div>
+          <button type="submit" class="athlete-dialog__close" value="close" aria-label="Fermer">
+            ×
+          </button>
+        </header>
+        <div id="replace-dialog-body" class="athlete-dialog__body replace-dialog__body"></div>
+      </form>
+    </dialog>
+
+    <dialog id="rules-dialog" class="athlete-dialog rules-dialog" aria-labelledby="rules-title">
+      <form method="dialog" class="athlete-dialog__panel">
+        <header class="athlete-dialog__head">
+          <div>
+            <p class="eyebrow">Team Athlé virtuelle</p>
+            <h2 id="rules-title">Algorithme N1</h2>
+            <p class="place">Comment la meilleure composition est calculée</p>
+          </div>
+          <button type="submit" class="athlete-dialog__close" value="close" aria-label="Fermer">
+            ×
+          </button>
+        </header>
+        <div id="rules-dialog-body" class="athlete-dialog__body rules-dialog__body">
+          <div id="n1-rules" class="rules-dialog__sections">
+            <section>
+              <h3>Objectif et score</h3>
+              <ul>
+                <li>Maximiser le score potentiel du club sur une journée d’athlétisme.</li>
+                <li>
+                  La liste des épreuves est fixe pour la compétition par équipe : aucune
+                  épreuve n’est retirée.
+                </li>
+                <li>Le calcul utilise le record personnel (PB) de chaque athlète.</li>
+                <li>
+                  Les points sont calculés avec le barème féminin ou masculin de la catégorie
+                  sélectionnée (Benjamins → BEF/BEM, Minimes → MIF/MIM).
+                </li>
+                <li>Filles et garçons sont calculés dans la même équipe.</li>
+                <li>Seul le meilleur score du club dans chaque épreuve compte dans le total.</li>
+                <li>Une épreuve sans athlète reste affichée avec « Personne » et 0 point.</li>
+              </ul>
+            </section>
+
+            <section>
+              <h3>Règles communes</h3>
+              <ul>
+                <li>Chaque athlète retenu participe à une, deux ou trois épreuves individuelles.</li>
+                <li>Quatre athlètes du club au maximum peuvent participer à la même épreuve.</li>
+                <li>
+                  Les courses sont réparties en trois types : sprint, haies et
+                  demi-fond/marche.
+                </li>
+                <li>Un athlète ne peut pas faire deux courses du même type.</li>
+              </ul>
+            </section>
+
+            <section>
+              <h3>Relais 4x60 m mixte</h3>
+              <ul>
+                <li>Affiché en bas de la liste des épreuves.</li>
+                <li>Composition obligatoire : 2 filles et 2 garçons.</li>
+                <li>
+                  Aucune contrainte de quota : un athlète peut courir le relais même s’il a
+                  déjà 3 épreuves individuelles.
+                </li>
+                <li>Le relais ne rapporte aucun point au total.</li>
+              </ul>
+            </section>
+
+            <section>
+              <h3>Benjamins</h3>
+              <ul>
+                <li>Une seule course au maximum.</li>
+                <li>Un seul saut au maximum.</li>
+                <li>Un seul lancer au maximum.</li>
+              </ul>
+            </section>
+
+            <section>
+              <h3>Minimes</h3>
+              <ul>
+                <li>Deux courses et deux concours au maximum.</li>
+                <li>Le 50 m et le 50 m haies sont exclus.</li>
+                <li>
+                  Le 80 m haies filles et le 100 m haies garçons forment une seule épreuve
+                  collective.
+                </li>
+              </ul>
+            </section>
+
+            <section>
+              <h3>Édition manuelle</h3>
+              <ul>
+                <li>
+                  Au chargement, la composition optimale est calculée automatiquement.
+                </li>
+                <li>
+                  Retirer marque un athlète comme absent de la compétition : il disparaît de
+                  toutes les épreuves, puis le calcul est relancé. Les épreuves non pourvues
+                  restent visibles à 0 point.
+                </li>
+                <li>
+                  Remplacer permet d’imposer n’importe quel athlète du club sur une épreuve.
+                  Sans performance connue, une estimation de 17 points est utilisée.
+                </li>
+                <li>
+                  Reset annule absences et remplacements pour revenir à la sélection
+                  automatique.
+                </li>
+              </ul>
+            </section>
+          </div>
+          <p id="n2-rules" class="empty" hidden>
+            Les règles et l’algorithme N2 ne sont pas encore définis.
+          </p>
+        </div>
+      </form>
+    </dialog>
+
     <script src="team-athle-virtuelle.js" type="module"></script>
   </body>
 </html>

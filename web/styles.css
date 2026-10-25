@@ -16,6 +16,18 @@
   box-sizing: border-box;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 html {
   scroll-behavior: smooth;
 }
@@ -497,6 +509,59 @@ main {
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
+}
+
+.picker-filter__head {
+  display: flex;
+  align-items: center;
+  min-height: 1rem;
+}
+
+.picker-filter__head > span {
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.rules-filter__controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 2.4rem;
+}
+
+.virtual-team__filters .filter-buttons {
+  min-height: 2.4rem;
+  align-items: center;
+}
+
+.rules-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--cab-blue);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.15rem;
+}
+
+.rules-link:hover {
+  color: var(--cab-blue-deep);
+}
+
+.rules-link:focus-visible {
+  outline: 2px solid rgba(64, 80, 255, 0.35);
+  outline-offset: 3px;
+  border-radius: 2px;
 }
 
 .filter-buttons {
@@ -1017,9 +1082,43 @@ html.dialog-open body {
   border-top: 1px solid var(--line);
 }
 
+.virtual-team__score-row {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0.15rem 0 0;
+}
+
+.virtual-team__score-row .planning__meta {
+  margin: 0;
+}
+
+.virtual-team-reset {
+  min-height: 2rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid rgba(64, 80, 255, 0.16);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--cab-blue-deep);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.virtual-team-reset:hover {
+  background: rgba(64, 80, 255, 0.08);
+}
+
+.virtual-team-reset:focus-visible {
+  outline: 2px solid rgba(64, 80, 255, 0.35);
+  outline-offset: 2px;
+}
+
 .virtual-team-events {
   display: grid;
-  grid-template-columns: minmax(8rem, 1fr) minmax(10rem, 1.5fr) auto;
+  grid-template-columns: minmax(7rem, 1fr) minmax(9rem, 1.4fr) auto auto;
 }
 
 .virtual-team-event {
@@ -1035,6 +1134,85 @@ html.dialog-open body {
 .virtual-team-event:first-child {
   padding-top: 0.15rem;
   border-top: 0;
+}
+
+.virtual-team-event--empty .virtual-team-event__athlete strong,
+.virtual-team-event--empty .virtual-team-event__performance strong,
+.virtual-team-event--empty .virtual-team-event__performance span {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.virtual-team-event--relay {
+  align-items: start;
+}
+
+.virtual-team-event__relay-athletes {
+  gap: 0.55rem;
+}
+
+.virtual-team-relay-group {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.virtual-team-relay-group > span {
+  color: var(--cab-orange);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.relay-composer {
+  display: grid;
+  gap: 0.55rem;
+  margin-bottom: 0.85rem;
+}
+
+.relay-composer h3 {
+  margin: 0;
+  color: var(--cab-blue-deep);
+  font-size: 0.95rem;
+}
+
+.relay-composer__slot {
+  display: grid;
+  gap: 0.25rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.relay-composer__slot select {
+  width: 100%;
+  appearance: none;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.7rem 0.85rem;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  background: #fff;
+}
+
+.relay-composer__save {
+  width: 100%;
+  min-height: 2.5rem;
+  margin-top: 0.35rem;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(115deg, var(--cab-blue-deep), var(--cab-blue));
+  color: #fff;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .virtual-team-event__event,
@@ -1069,6 +1247,164 @@ html.dialog-open body {
 .virtual-team-event__performance span {
   color: var(--cab-orange);
   font-weight: 800;
+}
+
+.virtual-team-event__performance span.is-estimated,
+.replace-option__score span.is-estimated {
+  color: #7a8194;
+  font-weight: 700;
+  font-style: italic;
+}
+
+.virtual-team-event__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.virtual-team-action {
+  min-height: 1.9rem;
+  padding: 0.28rem 0.55rem;
+  border: 1px solid rgba(64, 80, 255, 0.16);
+  border-radius: 9px;
+  background: #f7f8ff;
+  color: var(--cab-blue-deep);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.virtual-team-action:hover {
+  background: rgba(64, 80, 255, 0.12);
+}
+
+.virtual-team-action:focus-visible {
+  outline: 2px solid rgba(64, 80, 255, 0.35);
+  outline-offset: 1px;
+}
+
+.virtual-team-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.virtual-team-action--replace {
+  background: #fff;
+  border-color: rgba(230, 143, 23, 0.28);
+  color: #8a5608;
+}
+
+.virtual-team-action--replace:hover {
+  background: rgba(230, 143, 23, 0.12);
+}
+
+.replace-dialog {
+  width: min(28rem, calc(100% - 1.5rem));
+}
+
+.replace-dialog__body {
+  gap: 0.35rem;
+}
+
+.replace-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.35rem 0.85rem;
+  align-items: center;
+  width: 100%;
+  padding: 0.7rem 0.75rem;
+  border: 1px solid rgba(64, 80, 255, 0.1);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #f7f8ff, #fff);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.replace-option:hover,
+.replace-option.is-current {
+  border-color: rgba(64, 80, 255, 0.28);
+  box-shadow: 0 6px 16px rgba(42, 54, 214, 0.08);
+}
+
+.replace-option strong {
+  display: block;
+  font-size: 0.9rem;
+}
+
+.replace-option span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.replace-option__score {
+  display: grid;
+  justify-items: end;
+  gap: 0.1rem;
+  color: var(--cab-blue-deep);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.replace-option__score strong {
+  font-size: 0.9rem;
+}
+
+.replace-option__score span {
+  color: var(--cab-orange);
+  font-weight: 800;
+}
+
+.rules-dialog {
+  width: min(38rem, calc(100% - 1.5rem));
+  max-height: min(88dvh, 88vh, 48rem);
+}
+
+.rules-dialog .athlete-dialog__panel {
+  max-height: min(88dvh, 88vh, 48rem);
+}
+
+.rules-dialog__body {
+  gap: 1.15rem;
+}
+
+.rules-dialog__sections {
+  display: grid;
+  gap: 1.15rem;
+}
+
+.rules-dialog__sections[hidden] {
+  display: none;
+}
+
+.rules-dialog__body section {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.rules-dialog__body h3 {
+  margin: 0;
+  color: var(--cab-blue-deep);
+  font-size: 0.95rem;
+}
+
+.rules-dialog__body ul {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding-left: 1.2rem;
+  color: #4a5168;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.rules-dialog__body li::marker {
+  color: var(--cab-orange);
 }
 
 @keyframes rise {
@@ -1133,6 +1469,11 @@ html.dialog-open body {
     margin: 0;
   }
 
+  .virtual-team__score-row {
+    width: fit-content;
+    margin: 0;
+  }
+
   .slot {
     grid-template-columns: 3.8rem 1fr;
   }
@@ -1143,6 +1484,14 @@ html.dialog-open body {
 
   .filter-buttons {
     width: 100%;
+  }
+
+  .rules-filter__controls {
+    justify-content: space-between;
+  }
+
+  .rules-filter__controls .filter-buttons {
+    width: auto;
   }
 
   .filter-buttons button,
@@ -1167,6 +1516,11 @@ html.dialog-open body {
   .virtual-team-event__performance {
     grid-column: 2;
     grid-row: 1 / span 2;
+  }
+
+  .virtual-team-event__actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
   }
 
   .athlete-dialog {
