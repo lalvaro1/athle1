@@ -483,9 +483,15 @@ main {
 .picker-filter {
   display: grid;
   gap: 0.3rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
-.picker-filter > span {
+.picker-filter > span,
+.picker-filter > legend {
+  padding: 0;
   color: var(--muted);
   font-size: 0.66rem;
   font-weight: 700;
@@ -514,6 +520,44 @@ main {
   font-size: 0.75rem;
   font-weight: 700;
   cursor: pointer;
+}
+
+.filter-buttons label {
+  position: relative;
+  min-height: 2rem;
+  border-radius: 9px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.filter-buttons label span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: inherit;
+}
+
+.filter-buttons label input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.filter-buttons label input:checked + span {
+  background: #fff;
+  color: var(--cab-blue-deep);
+  box-shadow: 0 2px 8px rgba(42, 54, 214, 0.12);
+}
+
+.filter-buttons label input:focus-visible + span {
+  outline: 2px solid rgba(64, 80, 255, 0.35);
+  outline-offset: 1px;
 }
 
 .filter-buttons button.is-active {
@@ -958,6 +1002,75 @@ html.dialog-open body {
   background: rgba(64, 80, 255, 0.16);
 }
 
+.virtual-team__head {
+  margin-bottom: 0.35rem;
+}
+
+.virtual-team__head h2 {
+  font-size: clamp(1.35rem, 4vw, 2rem);
+  font-weight: 800;
+}
+
+.virtual-team__filters {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--line);
+}
+
+.virtual-team-events {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) minmax(10rem, 1.5fr) auto;
+}
+
+.virtual-team-event {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  gap: 0.75rem 1rem;
+  align-items: center;
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.virtual-team-event:first-child {
+  padding-top: 0.15rem;
+  border-top: 0;
+}
+
+.virtual-team-event__event,
+.virtual-team-event__athlete,
+.virtual-team-event__performance {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.virtual-team-event__event strong,
+.virtual-team-event__athlete strong {
+  font-size: 0.92rem;
+}
+
+.virtual-team-event span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.virtual-team-event__performance {
+  justify-items: end;
+  color: var(--cab-blue-deep);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.virtual-team-event__performance strong {
+  font-size: 0.95rem;
+}
+
+.virtual-team-event__performance span {
+  color: var(--cab-orange);
+  font-weight: 800;
+}
+
 @keyframes rise {
   from {
     opacity: 0;
@@ -1032,9 +1145,28 @@ html.dialog-open body {
     width: 100%;
   }
 
-  .filter-buttons button {
+  .filter-buttons button,
+  .filter-buttons label {
     flex: 1;
+  }
+
+  .filter-buttons button,
+  .filter-buttons label span {
     padding-inline: 0.4rem;
+  }
+
+  .virtual-team-events {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .virtual-team-event__athlete {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .virtual-team-event__performance {
+    grid-column: 2;
+    grid-row: 1 / span 2;
   }
 
   .athlete-dialog {

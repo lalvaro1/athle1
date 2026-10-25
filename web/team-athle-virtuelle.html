@@ -40,13 +40,60 @@
       </header>
 
       <main>
-        <section class="block placeholder-page">
-          <p class="eyebrow">Bientôt disponible</p>
-          <h2>Compose ta team idéale</h2>
-          <p class="place">
-            Le calculateur de Team Athlé virtuelle est en préparation.
-          </p>
-          <a class="placeholder-page__back" href="index.html">← Retour à l’agenda</a>
+        <section class="block picker-block" aria-labelledby="virtual-team-title">
+          <header class="virtual-team__head">
+            <p class="eyebrow">Sélection des athlètes</p>
+            <h2 id="virtual-team-title">Compose ta team idéale</h2>
+            <p class="place">Choisis les profils à afficher pour construire ton équipe.</p>
+          </header>
+
+          <div class="picker-filters virtual-team__filters" aria-label="Filtres des athlètes">
+            <fieldset class="picker-filter">
+              <legend>Catégorie</legend>
+              <div class="filter-buttons">
+                <label>
+                  <input type="radio" name="virtual-category" value="U14" checked />
+                  <span>Benjamins</span>
+                </label>
+                <label>
+                  <input type="radio" name="virtual-category" value="U16" />
+                  <span>Minimes</span>
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset class="picker-filter">
+              <legend>Règles</legend>
+              <div class="filter-buttons">
+                <label>
+                  <input type="radio" name="virtual-rules" value="N1" checked />
+                  <span>N1</span>
+                </label>
+                <label>
+                  <input type="radio" name="virtual-rules" value="N2" />
+                  <span>N2</span>
+                </label>
+              </div>
+            </fieldset>
+          </div>
+        </section>
+
+        <section
+          id="virtual-team-result"
+          class="block planning"
+          aria-labelledby="virtual-team-result-title"
+        >
+          <header class="planning__head">
+            <div class="planning__intro">
+              <p class="eyebrow">Sélection optimale</p>
+              <h2 id="virtual-team-result-title">Calcul en cours…</h2>
+              <p id="virtual-team-result-note" class="place">
+                Recherche de la meilleure composition N1.
+              </p>
+            </div>
+            <p id="virtual-team-score" class="planning__meta">…</p>
+          </header>
+          <div id="virtual-team-events" class="virtual-team-events" aria-live="polite"></div>
         </section>
       </main>
 
@@ -55,5 +102,6 @@
         <a href="index.html">Agenda Team Sharky</a>
       </footer>
     </div>
+    <script src="team-athle-virtuelle.js" type="module"></script>
   </body>
 </html>
