@@ -476,18 +476,34 @@ function buildEventRankingEntry(athlete, eventKey) {
     const cotation = category
       ? cotationsByCategoryEvent.get(`${category}:${eventKey}`)
       : null;
+    const pointsTotal = isPointsTotalEvent(entry.event)
+      ? parsePointsTotal(entry.pb)
+      : NaN;
     return {
       athlete,
       event: entry.event,
       performance: entry.pb,
       year,
       score,
-      direction: cotation?.direction || null,
-      value: cotation ? parsePerformanceValue(entry.pb, cotation.direction) : NaN,
+      direction: cotation?.direction || (Number.isFinite(pointsTotal) ? "higher" : null),
+      value: cotation
+        ? parsePerformanceValue(entry.pb, cotation.direction)
+        : pointsTotal,
     };
   });
   scored.sort(compareEventRankingEntries);
   return scored[0];
+}
+
+function isPointsTotalEvent(eventName) {
+  return /\b(?:triathlon|tétrathlon|tetrathlon)\b/i.test(String(eventName || ""));
+}
+
+function parsePointsTotal(performance) {
+  const match = String(performance || "")
+    .replace(",", ".")
+    .match(/\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : NaN;
 }
 
 function compareEventRankingEntries(a, b) {

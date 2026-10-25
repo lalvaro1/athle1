@@ -927,6 +927,37 @@ html.dialog-open body {
   text-decoration: none;
 }
 
+.foot a:hover {
+  text-decoration: underline;
+}
+
+.placeholder-page {
+  display: grid;
+  justify-items: start;
+  gap: 0.7rem;
+  padding-block: 2rem;
+}
+
+.placeholder-page h2 {
+  font-size: clamp(1.35rem, 4vw, 2rem);
+  font-weight: 800;
+}
+
+.placeholder-page__back {
+  margin-top: 0.5rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: 12px;
+  background: rgba(64, 80, 255, 0.1);
+  color: var(--cab-blue-deep);
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.placeholder-page__back:hover {
+  background: rgba(64, 80, 255, 0.16);
+}
+
 @keyframes rise {
   from {
     opacity: 0;
