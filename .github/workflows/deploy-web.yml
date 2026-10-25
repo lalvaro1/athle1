@@ -64,7 +64,7 @@ jobs:
           BUCKET: athle
         run: |
           set -euo pipefail
-          for file in index.html team-athle-virtuelle.html app.js styles.css; do
+          for file in index.html team-athle-virtuelle.html team-athle-virtuelle.js app.js styles.css; do
             case "$file" in
               *.html) ctype="text/html; charset=utf-8" ;;
               *.css)  ctype="text/css; charset=utf-8" ;;
