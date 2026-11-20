@@ -248,6 +248,7 @@ function athleParseDirectStartListClubAthletes(html, clubName) {
       tds.push(athleStripHtml(tdMatch[1]));
     }
     // place | ? | nom | cat | club | dept | ligue | SB | PB
+    // SB/PB ne sont pas des chronos de course — on ne les met pas dans performance.
     if (tds.length < 5) continue;
     var rowClub = tds[4] || '';
     if (!athleClubNamesMatch(rowClub, clubName)) continue;
@@ -256,7 +257,9 @@ function athleParseDirectStartListClubAthletes(html, clubName) {
       athleteName: tds[2] || null,
       category: tds[3] || null,
       clubName: rowClub,
-      performance: tds[8] || tds[7] || null,
+      performance: null,
+      sb: tds[7] || null,
+      pb: tds[8] || null,
     });
   }
   return rows;
