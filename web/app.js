@@ -925,13 +925,14 @@ function renderUpcomingCompetition(comp, options = {}) {
   const links = document.createElement("div");
   links.className = "upcoming-comp__links";
   if (comp.scheduleUrl) {
+    const isPdf = /\.pdf(\?|#|$)/i.test(comp.scheduleUrl);
     links.append(
       Object.assign(document.createElement("a"), {
         className: "upcoming-comp__link",
         href: comp.scheduleUrl,
         target: "_blank",
         rel: "noopener",
-        textContent: "Voir les horaires (PDF)",
+        textContent: isPdf ? "Voir les horaires (PDF)" : "Voir les horaires",
       }),
     );
   }

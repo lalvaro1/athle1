@@ -165,21 +165,39 @@ function athleFetchCompetitionFicheMeta(fichePathOrId) {
 function athleParseScheduleUrlFromFicheHtml(html) {
   var linkRe = /<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
   var m;
-  var pdfFallback = null;
+  var best = null;
+  var bestScore = 0;
   while ((m = linkRe.exec(html)) !== null) {
     var href = String(m[1] || '').trim();
     var label = athleStripHtml(m[2] || '').toLowerCase();
     var hrefLow = href.toLowerCase();
     if (!href || href.indexOf('javascript:') === 0 || href === '#') continue;
+    // Liens chrome du site (nav / footer), pas les horaires de la compétition.
+    if (
+      /programme-i-run-clean|trombinoscope|charte-informatique|index-egalite|calendrier_20\d{2}/i.test(
+        hrefLow,
+      )
+    ) {
+      continue;
+    }
     var absolute = athleAbsoluteUrl(href);
+    if (!absolute) continue;
     var isPdf = /\.pdf(\?|#|$)/i.test(hrefLow);
-    var looksSchedule =
-      /horaire|programme|start[\s-]?list|timing/i.test(label) ||
-      /horaire|programme|start[\s-]?list|timing/i.test(hrefLow);
-    if (looksSchedule) return absolute;
-    if (isPdf && !pdfFallback) pdfFallback = absolute;
+    // « programme » uniquement sur le libellé (sinon /contenu/programme-… matche).
+    var labelSchedule = /horaire|start[\s-]?list|timing|programme/i.test(label);
+    var hrefSchedule = /horaire|start[\s-]?list|timing/i.test(hrefLow);
+    if (!labelSchedule && !hrefSchedule && !isPdf) continue;
+    var score = 0;
+    if (/horaire/i.test(label) || /horaire/i.test(hrefLow)) score += 40;
+    if (labelSchedule || hrefSchedule) score += 20;
+    if (isPdf) score += 30;
+    if (score > bestScore) {
+      bestScore = score;
+      best = absolute;
+    }
   }
-  return pdfFallback;
+  // Exige un vrai signal « horaires/programme » (évite un PDF de nav au hasard).
+  return bestScore >= 40 ? best : null;
 }
 
 function athleParseCompetitionFicheNotes(html) {
