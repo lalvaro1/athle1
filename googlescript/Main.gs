@@ -490,26 +490,46 @@ function runAthleSyncForDate(isoDate, sharedIndex) {
   for (var i = 0; i < listPayload.competitions.length; i++) {
     var comp = listPayload.competitions[i];
     var key = comp.key || athleCompetitionKey(comp);
-    // Compétitions futures : indexées sans détail (pas encore de page résultats).
-    if (!comp.hasResults || !comp.resultsId) {
-      Logger.log(
-        '  · à venir %s — %s (fiche %s%s)',
-        key,
-        comp.calendarLabel || '?',
-        comp.ficheId || '?',
-        comp.scheduleUrl ? ', horaires OK' : ', sans horaires',
-      );
-      continue;
-    }
+    var detailSourceId = null;
+    var detail = null;
     try {
-      athleMaybeSleep();
-      var detail = athleGetClubEpreuvesInCompetition(comp.resultsId, clubName, comp.club);
+      if (comp.hasResults && comp.resultsId) {
+        athleMaybeSleep();
+        detail = athleGetClubEpreuvesInCompetition(comp.resultsId, clubName, comp.club);
+        detailSourceId = comp.resultsId;
+      } else if (comp.liveId) {
+        // Start-lists Live disponibles avant les résultats officiels.
+        Logger.log(
+          '  · à venir %s — %s (live %s%s)',
+          key,
+          comp.calendarLabel || '?',
+          comp.liveId,
+          comp.scheduleUrl ? ', PDF OK' : '',
+        );
+        athleMaybeSleep();
+        detail = athleGetClubEpreuvesFromLive(comp.liveId, clubName, comp.club);
+        detailSourceId = 'live-' + comp.liveId;
+        if (!detail || !detail.count) {
+          Logger.log('  · live %s : aucun athlète club dans les start-lists', comp.liveId);
+          continue;
+        }
+      } else {
+        Logger.log(
+          '  · à venir %s — %s (fiche %s%s)',
+          key,
+          comp.calendarLabel || '?',
+          comp.ficheId || '?',
+          comp.scheduleUrl ? ', horaires OK' : ', sans horaires',
+        );
+        continue;
+      }
+
       var baseName = athleSanitizeObjectFilename(
-        comp.calendarLabel || comp.resultsTitle || comp.resultsId,
+        comp.calendarLabel || comp.resultsTitle || detailSourceId,
       );
       var fileName = isoDate + '_' + baseName + '.json';
       if (usedNames[fileName]) {
-        fileName = isoDate + '_' + baseName + '_' + comp.resultsId + '.json';
+        fileName = isoDate + '_' + baseName + '_' + detailSourceId + '.json';
       }
       usedNames[fileName] = true;
       detail.storage = {
@@ -522,11 +542,14 @@ function runAthleSyncForDate(isoDate, sharedIndex) {
     } catch (err) {
       errors += 1;
       Logger.log('  ERREUR compétition %s : %s', key, err.message || err);
-      r2UploadJson(isoDate + '_ERROR_' + String(comp.resultsId || comp.ficheId) + '.json', {
-        error: String(err.message || err),
-        competition: comp,
-        fetchedAt: new Date().toISOString(),
-      });
+      r2UploadJson(
+        isoDate + '_ERROR_' + String(comp.resultsId || comp.liveId || comp.ficheId) + '.json',
+        {
+          error: String(err.message || err),
+          competition: comp,
+          fetchedAt: new Date().toISOString(),
+        },
+      );
     }
   }
 
@@ -625,6 +648,8 @@ function athleMergeCompetitionsIntoIndex(index, competitions, isoDate) {
       if (comp.ligue) current.ligue = comp.ligue;
       if (comp.ficheUrl) current.ficheUrl = comp.ficheUrl;
       if (comp.scheduleUrl) current.scheduleUrl = comp.scheduleUrl;
+      if (comp.liveUrl) current.liveUrl = comp.liveUrl;
+      if (comp.liveId) current.liveId = comp.liveId;
       if (comp.notes) current.notes = comp.notes;
       continue;
     }
@@ -648,6 +673,8 @@ function athleMergeCompetitionsIntoIndex(index, competitions, isoDate) {
       club: comp.club,
       ficheUrl: comp.ficheUrl || null,
       scheduleUrl: comp.scheduleUrl || null,
+      liveUrl: comp.liveUrl || null,
+      liveId: comp.liveId || null,
       notes: comp.notes || null,
     };
     index.competitions.push(entry);

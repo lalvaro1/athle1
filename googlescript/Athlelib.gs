@@ -154,10 +154,239 @@ function athleFetchCompetitionFicheMeta(fichePathOrId) {
     path = ATHLE_SITE + path;
   }
   var html = athleFetchHtml(path);
+  var live = athleParseLiveMetaFromFicheHtml(html);
   return {
     ficheUrl: path,
     scheduleUrl: athleParseScheduleUrlFromFicheHtml(html),
+    liveUrl: live.liveUrl,
+    liveId: live.liveId,
     notes: athleParseCompetitionFicheNotes(html),
+  };
+}
+
+/** Lien « START-LISTS / Live » sur la fiche (ex. /direct/324680). */
+function athleParseLiveMetaFromFicheHtml(html) {
+  var m =
+    String(html || '').match(
+      /href="((?:https?:\/\/(?:www\.)?athle\.fr)?\/direct\/(\d+))"/i,
+    ) ||
+    String(html || '').match(/(https?:\/\/(?:www\.)?athle\.fr\/direct\/(\d+))/i);
+  if (!m) return { liveUrl: null, liveId: null };
+  return {
+    liveUrl: athleAbsoluteUrl(m[1]),
+    liveId: m[2],
+  };
+}
+
+function athleBuildDirectAjaxUrl(liveId) {
+  return (
+    ATHLE_SITE +
+    '/ajax/direct.aspx?mode=0&competition=' +
+    encodeURIComponent(String(liveId)) +
+    '&competition2=&date=&frmepreuve=&tri=0&display=0&reactions=0'
+  );
+}
+
+function athleBuildDirectEpreuveUrl(liveId, epreuveId) {
+  return (
+    ATHLE_SITE +
+    '/bases/liste.aspx?frmbase=directs&frmmode=1&frmcompetition=' +
+    encodeURIComponent(String(liveId)) +
+    '&frmepreuve=' +
+    encodeURIComponent(String(epreuveId))
+  );
+}
+
+/** Horaires + UUID épreuves depuis le tableau Live. */
+function athleParseLiveTimetableHtml(html) {
+  var events = [];
+  var trRe = /<tr([^>]*)>([\s\S]*?)<\/tr>/gi;
+  var trMatch;
+  while ((trMatch = trRe.exec(html)) !== null) {
+    var attrs = trMatch[1] || '';
+    var body = trMatch[2] || '';
+    if (/detail-row/i.test(attrs) || /table-mobile-block/i.test(attrs)) continue;
+    if (body.indexOf('frmepreuve=') === -1) continue;
+    var eidMatch = body.match(/frmepreuve=([0-9a-f-]+)/i);
+    if (!eidMatch) continue;
+    var timeMatch = body.match(/button-LiveELH[^>]*>([^<]+)/i);
+    var tds = [];
+    var tdRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+    var tdMatch;
+    while ((tdMatch = tdRe.exec(body)) !== null) {
+      tds.push(athleStripHtml(tdMatch[1]));
+    }
+    // time | cat | épreuve | série | …
+    var category = tds[1] || null;
+    var epreuveName = tds[2] || null;
+    var series = tds[3] || null;
+    if (!epreuveName) continue;
+    events.push({
+      epreuveId: eidMatch[1],
+      time: timeMatch ? athleStripHtml(timeMatch[1]) : tds[0] || null,
+      category: category,
+      epreuveName: epreuveName,
+      series: series,
+    });
+  }
+  return events;
+}
+
+/** Athlètes du club dans une liste de départ Direct (`trlive`). */
+function athleParseDirectStartListClubAthletes(html, clubName) {
+  var rows = [];
+  var trRe = /<tr[^>]*class="[^"]*trlive[^"]*"[^>]*>([\s\S]*?)<\/tr>/gi;
+  var trMatch;
+  while ((trMatch = trRe.exec(html)) !== null) {
+    var chunk = trMatch[1];
+    var athleteMatch = chunk.match(/\/athletes\/(\d+)/i);
+    if (!athleteMatch) continue;
+    var tds = [];
+    var tdRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+    var tdMatch;
+    while ((tdMatch = tdRe.exec(chunk)) !== null) {
+      tds.push(athleStripHtml(tdMatch[1]));
+    }
+    // place | ? | nom | cat | club | dept | ligue | SB | PB
+    if (tds.length < 5) continue;
+    var rowClub = tds[4] || '';
+    if (!athleClubNamesMatch(rowClub, clubName)) continue;
+    rows.push({
+      athleteId: athleteMatch[1],
+      athleteName: tds[2] || null,
+      category: tds[3] || null,
+      clubName: rowClub,
+      performance: tds[8] || tds[7] || null,
+    });
+  }
+  return rows;
+}
+
+/**
+ * Planning club depuis les start-lists Live (avant résultats officiels).
+ * @return {Object} même forme que athleGetClubEpreuvesInCompetition
+ */
+function athleGetClubEpreuvesFromLive(liveId, clubName, knownClub) {
+  var id = String(liveId || '').trim();
+  if (!id) throw new Error('liveId manquant');
+  var club =
+    knownClub && (knownClub.id || knownClub.name)
+      ? knownClub
+      : {
+          id: String((ATHLE_CONFIG && ATHLE_CONFIG.CLUB_ID) || ''),
+          name: String(clubName || (ATHLE_CONFIG && ATHLE_CONFIG.CLUB_NAME) || ''),
+        };
+  var queryName = club.name || clubName;
+
+  var timetableHtml = athleFetchHtml(athleBuildDirectAjaxUrl(id));
+  var events = athleParseLiveTimetableHtml(timetableHtml);
+  if (!events.length) {
+    return {
+      fetchedAt: new Date().toISOString(),
+      competitionId: id,
+      liveId: id,
+      title: null,
+      club: club,
+      sourceUrl: ATHLE_SITE + '/direct/' + id,
+      source: 'live-startlists',
+      count: 0,
+      participantRows: 0,
+      epreuves: [],
+    };
+  }
+
+  var byEpreuve = {};
+  var participantCount = 0;
+  var batchSize = 8;
+  for (var offset = 0; offset < events.length; offset += batchSize) {
+    var slice = events.slice(offset, offset + batchSize);
+    var requests = [];
+    for (var i = 0; i < slice.length; i++) {
+      requests.push({
+        url: athleBuildDirectEpreuveUrl(id, slice[i].epreuveId),
+        muteHttpExceptions: true,
+        headers: {
+          'User-Agent': ATHLE_UA,
+          Accept: 'text/html,application/xhtml+xml',
+          'Accept-Language': 'fr-FR,fr;q=0.9',
+        },
+      });
+    }
+    var responses = UrlFetchApp.fetchAll(requests);
+    for (var j = 0; j < slice.length; j++) {
+      var ev = slice[j];
+      var resp = responses[j];
+      if (!resp || resp.getResponseCode() >= 400) continue;
+      var athletes = athleParseDirectStartListClubAthletes(
+        resp.getContentText('UTF-8'),
+        queryName,
+      );
+      if (!athletes.length) continue;
+      var displayName = ev.epreuveName;
+      if (ev.category) displayName = displayName + ' / ' + ev.category;
+      var key = athleNormalizeEpreuveName(displayName);
+      if (!byEpreuve[key]) {
+        byEpreuve[key] = {
+          id: ev.epreuveId,
+          name: displayName,
+          horaire: null,
+          seriesSchedule: {},
+          participants: [],
+        };
+      }
+      var times = {};
+      for (var a = 0; a < athletes.length; a++) {
+        var ath = athletes[a];
+        if (!athleIsAllowedYouthAthleteCategory(ath.category)) continue;
+        participantCount += 1;
+        byEpreuve[key].participants.push({
+          athleteId: ath.athleteId,
+          athleteName: ath.athleteName,
+          epreuveName: displayName,
+          performance: ath.performance,
+          series: ev.series || null,
+          dossard: null,
+          category: ath.category,
+          date: null,
+          horaire: ev.time || null,
+        });
+        if (ev.time) times[ev.time] = true;
+      }
+      var existingTimes = {};
+      if (byEpreuve[key].horaire) {
+        var prevParts = String(byEpreuve[key].horaire).split(',');
+        for (var p = 0; p < prevParts.length; p++) {
+          var v = String(prevParts[p] || '').trim();
+          if (v) existingTimes[v] = true;
+        }
+      }
+      for (var tk in times) existingTimes[tk] = true;
+      var timeKeys = Object.keys(existingTimes).sort();
+      byEpreuve[key].horaire =
+        timeKeys.length === 1 ? timeKeys[0] : timeKeys.length > 1 ? timeKeys.join(', ') : null;
+    }
+    if (offset + batchSize < events.length) athleMaybeSleep();
+  }
+
+  var epreuves = [];
+  for (var nameKey in byEpreuve) {
+    if (byEpreuve[nameKey].participants.length) epreuves.push(byEpreuve[nameKey]);
+  }
+  epreuves.sort(function (a, b) {
+    return a.name.localeCompare(b.name, 'fr');
+  });
+
+  return {
+    fetchedAt: new Date().toISOString(),
+    competitionId: id,
+    liveId: id,
+    title: null,
+    club: club,
+    sourceUrl: ATHLE_SITE + '/direct/' + id,
+    source: 'live-startlists',
+    count: epreuves.length,
+    participantRows: participantCount,
+    epreuves: epreuves,
   };
 }
 
@@ -468,6 +697,8 @@ function athleGetCompetitionsForDate(isoDate, clubName, youthCategories) {
         (comp.fichePath ? ATHLE_SITE + comp.fichePath : null) ||
         (comp.ficheId ? ATHLE_SITE + '/competitions/' + comp.ficheId : null),
       scheduleUrl: (ficheMeta && ficheMeta.scheduleUrl) || null,
+      liveUrl: (ficheMeta && ficheMeta.liveUrl) || null,
+      liveId: (ficheMeta && ficheMeta.liveId) || null,
       notes: (ficheMeta && ficheMeta.notes) || null,
     });
   }

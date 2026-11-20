@@ -863,11 +863,7 @@ async function loadCompetition(comp) {
     if (comp.resultsId) keys.push(`${detailDate}_${baseName}_${comp.resultsId}.json`);
   }
 
-  if (comp.upcoming || comp.hasResults === false) {
-    planningMetaEl.textContent = "À venir";
-    renderUpcomingCompetition(comp);
-    return;
-  }
+  const isUpcoming = Boolean(comp.upcoming || comp.hasResults === false);
 
   try {
     let payload = null;
@@ -883,17 +879,27 @@ async function loadCompetition(comp) {
     const athleteCount = new Set(
       schedule.flatMap((slot) => slot.athletes.map((athlete) => athlete.name)),
     ).size;
-    planningMetaEl.textContent =
-      athleteCount === 1 ? "1 athlète" : `${athleteCount} athlètes`;
+    planningMetaEl.textContent = isUpcoming
+      ? athleteCount === 1
+        ? "Start-list · 1 athlète"
+        : `Start-list · ${athleteCount} athlètes`
+      : athleteCount === 1
+        ? "1 athlète"
+        : `${athleteCount} athlètes`;
     renderSchedule(schedule);
   } catch (error) {
-    planningMetaEl.textContent = "Planning indisponible";
-    if (comp.scheduleUrl || comp.ficheUrl) {
-      renderUpcomingCompetition(comp, {
-        intro: "Planning détaillé indisponible pour le moment.",
-      });
+    if (isUpcoming) {
+      planningMetaEl.textContent = "À venir";
+      renderUpcomingCompetition(comp);
     } else {
-      scheduleEl.append(message("Impossible de charger les épreuves de cette compétition."));
+      planningMetaEl.textContent = "Planning indisponible";
+      if (comp.scheduleUrl || comp.liveUrl || comp.ficheUrl) {
+        renderUpcomingCompetition(comp, {
+          intro: "Planning détaillé indisponible pour le moment.",
+        });
+      } else {
+        scheduleEl.append(message("Impossible de charger les épreuves de cette compétition."));
+      }
     }
     console.error(error);
   }
@@ -904,12 +910,15 @@ function renderUpcomingCompetition(comp, options = {}) {
   const wrap = document.createElement("div");
   wrap.className = "upcoming-comp";
 
+  const hasLive = Boolean(comp.liveUrl || comp.liveId);
   wrap.append(
     Object.assign(document.createElement("p"), {
       className: "empty",
       textContent:
         options.intro ||
-        "Compétition déclarée au calendrier. Le détail club sera disponible le jour J.",
+        (hasLive
+          ? "Start-lists publiées sur athle.fr — le détail club sera synchronisé au prochain passage."
+          : "Compétition déclarée au calendrier. Le détail club sera disponible dès les start-lists."),
     }),
   );
 
@@ -933,6 +942,19 @@ function renderUpcomingCompetition(comp, options = {}) {
         target: "_blank",
         rel: "noopener",
         textContent: isPdf ? "Voir les horaires (PDF)" : "Voir les horaires",
+      }),
+    );
+  }
+  const liveHref =
+    comp.liveUrl || (comp.liveId ? `https://www.athle.fr/direct/${comp.liveId}` : null);
+  if (liveHref) {
+    links.append(
+      Object.assign(document.createElement("a"), {
+        className: "upcoming-comp__link",
+        href: liveHref,
+        target: "_blank",
+        rel: "noopener",
+        textContent: "Start-lists / Live",
       }),
     );
   }
