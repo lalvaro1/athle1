@@ -149,7 +149,7 @@ async function boot() {
       fillCompetitionSelect(competitions);
       const chosen =
         competitions.find((comp) => String(comp.resultsId) === String(selectedId)) ||
-        competitions[0];
+        pickDefaultCompetition(competitions);
       selectedId = String(chosen.resultsId);
       competitionSelect.value = selectedId;
       competitionSelect.disabled = false;
@@ -759,6 +759,26 @@ function sortCompetitionsNewestFirst(list) {
   });
 }
 
+/**
+ * Par défaut : une compétition du jour (pas J+1), même si le lendemain
+ * est déjà dans l’index. Sinon la plus récente.
+ */
+function pickDefaultCompetition(list) {
+  if (!list.length) return null;
+  const today = localIsoDate();
+  const todayComps = list.filter((comp) => competitionSortDate(comp) === today);
+  if (todayComps.length) return todayComps[0];
+  return list[0];
+}
+
+function localIsoDate() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function competitionSortDate(comp) {
   const dates = Array.isArray(comp.dates) && comp.dates.length ? comp.dates : [];
   const candidates = [comp.date, ...dates].filter(Boolean).map(String);
@@ -780,7 +800,8 @@ function competitionOptionLabel(comp) {
   const title = comp.calendarLabel || comp.resultsTitle || `Compétition ${comp.resultsId}`;
   const when = date ? formatShortDate(date) : "";
   const location = formatCompetitionLocation(comp);
-  const head = when ? `${when} — ${title}` : title;
+  const upcoming = comp.upcoming || comp.hasResults === false ? " (à venir)" : "";
+  const head = when ? `${when} — ${title}${upcoming}` : `${title}${upcoming}`;
   return location ? `${head} — ${location}` : head;
 }
 
@@ -842,6 +863,12 @@ async function loadCompetition(comp) {
     if (comp.resultsId) keys.push(`${detailDate}_${baseName}_${comp.resultsId}.json`);
   }
 
+  if (comp.upcoming || comp.hasResults === false) {
+    planningMetaEl.textContent = "À venir";
+    renderUpcomingCompetition(comp);
+    return;
+  }
+
   try {
     let payload = null;
     for (const key of [...new Set(keys)]) {
@@ -861,9 +888,66 @@ async function loadCompetition(comp) {
     renderSchedule(schedule);
   } catch (error) {
     planningMetaEl.textContent = "Planning indisponible";
-    scheduleEl.append(message("Impossible de charger les épreuves de cette compétition."));
+    if (comp.scheduleUrl || comp.ficheUrl) {
+      renderUpcomingCompetition(comp, {
+        intro: "Planning détaillé indisponible pour le moment.",
+      });
+    } else {
+      scheduleEl.append(message("Impossible de charger les épreuves de cette compétition."));
+    }
     console.error(error);
   }
+}
+
+function renderUpcomingCompetition(comp, options = {}) {
+  scheduleEl.replaceChildren();
+  const wrap = document.createElement("div");
+  wrap.className = "upcoming-comp";
+
+  wrap.append(
+    Object.assign(document.createElement("p"), {
+      className: "empty",
+      textContent:
+        options.intro ||
+        "Compétition déclarée au calendrier. Le détail club sera disponible le jour J.",
+    }),
+  );
+
+  if (comp.notes) {
+    wrap.append(
+      Object.assign(document.createElement("p"), {
+        className: "place",
+        textContent: comp.notes,
+      }),
+    );
+  }
+
+  const links = document.createElement("div");
+  links.className = "upcoming-comp__links";
+  if (comp.scheduleUrl) {
+    links.append(
+      Object.assign(document.createElement("a"), {
+        className: "upcoming-comp__link",
+        href: comp.scheduleUrl,
+        target: "_blank",
+        rel: "noopener",
+        textContent: "Voir les horaires (PDF)",
+      }),
+    );
+  }
+  if (comp.ficheUrl) {
+    links.append(
+      Object.assign(document.createElement("a"), {
+        className: "upcoming-comp__link upcoming-comp__link--secondary",
+        href: comp.ficheUrl,
+        target: "_blank",
+        rel: "noopener",
+        textContent: "Fiche athle.fr",
+      }),
+    );
+  }
+  if (links.childElementCount) wrap.append(links);
+  scheduleEl.append(wrap);
 }
 
 function renderSchedule(schedule) {
