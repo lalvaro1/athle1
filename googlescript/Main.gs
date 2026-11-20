@@ -3,12 +3,13 @@
  *
  * Fichiers : Config.gs, AthleLib.gs, R2SSStorage.gss, Main.gs
  * 1. Configurer ATHLE_CONFIG + setR2ApiTokenFromEditor()
- * 2. runAthleSyncForToday() — sync du jour
- * 3. getAllDataForMonth(10, 2026) — backfill manuel mois par mois
- * 4. rebuildCompetitionsIndexFromBucket() — reconstruit competitions.json depuis R2
- * 5. runAthleSyncAthletes() — index compact → data/athletes.json
- * 6. runAthleSyncAthleteDetails() — fiche complète → data/athletes/{id}.json (+ index)
- * 7. installHourlyTrigger() une fois
+ * 2. runAthleSyncForToday() — sync du jour seul
+ * 3. runAthleSyncForTodayAndTomorrow() — sync J + J+1 (utilisé par le trigger horaire)
+ * 4. getAllDataForMonth(10, 2026) — backfill manuel mois par mois
+ * 5. rebuildCompetitionsIndexFromBucket() — reconstruit competitions.json depuis R2
+ * 6. runAthleSyncAthletes() — index compact → data/athletes.json
+ * 7. runAthleSyncAthleteDetails() — fiche complète → data/athletes/{id}.json (+ index)
+ * 8. installHourlyTrigger() une fois
  *
  * Index agrégé : data/competitions.json (append des nouvelles compétitions).
  * Athlètes : data/athletes.json + data/athletes/{id}.json
@@ -152,7 +153,8 @@ function syncAthleHourly() {
     return;
   }
   try {
-    runAthleSyncForToday();
+    // J (live) + J+1 (déclarations anticipées).
+    return runAthleSyncForTodayAndTomorrow();
   } finally {
     lock.releaseLock();
   }
@@ -162,6 +164,32 @@ function runAthleSyncForToday() {
   var tz = ATHLE_CONFIG.TIMEZONE || 'Europe/Paris';
   var today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
   return runAthleSyncForDate(today);
+}
+
+/**
+ * Sync le jour courant puis le lendemain (compétitions à déclarer à l’avance).
+ * Réutilise le même index competitions.json pour les deux dates.
+ */
+function runAthleSyncForTodayAndTomorrow() {
+  var tz = ATHLE_CONFIG.TIMEZONE || 'Europe/Paris';
+  var now = new Date();
+  var today = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+  var tomorrowDate = new Date(now.getTime());
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  var tomorrow = Utilities.formatDate(tomorrowDate, tz, 'yyyy-MM-dd');
+
+  var index = athleLoadCompetitionsIndex();
+  Logger.log('Sync horaire J + J+1 — %s puis %s', today, tomorrow);
+  var todayResult = runAthleSyncForDate(today, index);
+  var tomorrowResult = runAthleSyncForDate(tomorrow, index);
+  athleSaveCompetitionsIndex(index);
+
+  return {
+    today: todayResult,
+    tomorrow: tomorrowResult,
+    indexCount: index.count,
+    objectKey: r2ObjectKey(COMPETITIONS_INDEX_FILE),
+  };
 }
 
 /**
@@ -461,6 +489,18 @@ function runAthleSyncForDate(isoDate, sharedIndex) {
   var errors = 0;
   for (var i = 0; i < listPayload.competitions.length; i++) {
     var comp = listPayload.competitions[i];
+    var key = comp.key || athleCompetitionKey(comp);
+    // Compétitions futures : indexées sans détail (pas encore de page résultats).
+    if (!comp.hasResults || !comp.resultsId) {
+      Logger.log(
+        '  · à venir %s — %s (fiche %s%s)',
+        key,
+        comp.calendarLabel || '?',
+        comp.ficheId || '?',
+        comp.scheduleUrl ? ', horaires OK' : ', sans horaires',
+      );
+      continue;
+    }
     try {
       athleMaybeSleep();
       var detail = athleGetClubEpreuvesInCompetition(comp.resultsId, clubName, comp.club);
@@ -477,12 +517,12 @@ function runAthleSyncForDate(isoDate, sharedIndex) {
         objectKey: r2ObjectKey(fileName),
       };
       r2UploadJson(fileName, detail);
-      athleAttachDetailFileToIndex(index, comp.resultsId, fileName, detail.storage.objectKey);
+      athleAttachDetailFileToIndex(index, key, fileName, detail.storage.objectKey);
       Logger.log('  → %s (%s épreuves)', detail.storage.objectKey, detail.count);
     } catch (err) {
       errors += 1;
-      Logger.log('  ERREUR compétition %s : %s', comp.resultsId, err.message || err);
-      r2UploadJson(isoDate + '_ERROR_' + comp.resultsId + '.json', {
+      Logger.log('  ERREUR compétition %s : %s', key, err.message || err);
+      r2UploadJson(isoDate + '_ERROR_' + String(comp.resultsId || comp.ficheId) + '.json', {
         error: String(err.message || err),
         competition: comp,
         fetchedAt: new Date().toISOString(),
@@ -543,56 +583,95 @@ function athleSaveCompetitionsIndex(index) {
 }
 
 /**
- * Ajoute les compétitions absentes (clé = resultsId). Append seulement.
+ * Ajoute les compétitions absentes (clé = resultsId ou fiche:ID).
+ * Append seulement ; une entrée « fiche » peut être enrichie plus tard.
  * @return {{added: number}}
  */
 function athleMergeCompetitionsIntoIndex(index, competitions, isoDate) {
   if (!index.competitions) index.competitions = [];
   var byId = {};
+  var byFiche = {};
   for (var i = 0; i < index.competitions.length; i++) {
     var existing = index.competitions[i];
-    if (existing && existing.resultsId) byId[String(existing.resultsId)] = existing;
+    if (!existing) continue;
+    var existingKey = existing.key || athleCompetitionKey(existing);
+    if (existingKey) byId[existingKey] = existing;
+    if (existing.resultsId) byId[String(existing.resultsId)] = existing;
+    if (existing.ficheId) byFiche[String(existing.ficheId)] = existing;
   }
 
   var added = 0;
   for (var j = 0; j < (competitions || []).length; j++) {
     var comp = competitions[j];
-    var id = String(comp.resultsId);
-    var current = byId[id];
+    var id = String(comp.key || athleCompetitionKey(comp));
+    if (!id) continue;
+    var current =
+      byId[id] ||
+      (comp.resultsId && byId[String(comp.resultsId)]) ||
+      (comp.ficheId && byFiche[String(comp.ficheId)]) ||
+      null;
     if (current) {
       if (!current.dates) current.dates = current.date ? [current.date] : [];
       if (current.dates.indexOf(isoDate) === -1) current.dates.push(isoDate);
+      if (!current.key) current.key = id;
+      if (!current.resultsId && comp.resultsId) current.resultsId = comp.resultsId;
+      if (!current.ficheId && comp.ficheId) current.ficheId = comp.ficheId;
+      if (comp.hasResults) {
+        current.hasResults = true;
+        current.upcoming = false;
+      }
+      if (comp.resultsTitle) current.resultsTitle = comp.resultsTitle;
+      if (comp.department) current.department = comp.department;
+      if (comp.ligue) current.ligue = comp.ligue;
+      if (comp.ficheUrl) current.ficheUrl = comp.ficheUrl;
+      if (comp.scheduleUrl) current.scheduleUrl = comp.scheduleUrl;
+      if (comp.notes) current.notes = comp.notes;
       continue;
     }
 
     var entry = {
-      resultsId: comp.resultsId,
+      key: id,
+      resultsId: comp.resultsId || id,
       ficheId: comp.ficheId,
+      hasResults: Boolean(comp.hasResults),
+      upcoming: Boolean(comp.upcoming),
       date: isoDate,
       dates: [isoDate],
       calendarDateLabel: comp.calendarDateLabel,
       calendarLabel: comp.calendarLabel,
       place: comp.place,
+      department: comp.department || null,
+      ligue: comp.ligue || null,
       type: comp.type,
       level: comp.level,
       resultsTitle: comp.resultsTitle,
       club: comp.club,
+      ficheUrl: comp.ficheUrl || null,
+      scheduleUrl: comp.scheduleUrl || null,
+      notes: comp.notes || null,
     };
     index.competitions.push(entry);
     byId[id] = entry;
+    if (entry.ficheId) byFiche[String(entry.ficheId)] = entry;
     added += 1;
-    Logger.log('  + nouvelle compétition %s — %s', id, entry.calendarLabel || entry.resultsTitle);
+    Logger.log(
+      '  + nouvelle compétition %s — %s%s',
+      id,
+      entry.calendarLabel || entry.resultsTitle,
+      entry.upcoming ? ' (à venir)' : '',
+    );
   }
 
   index.count = index.competitions.length;
   return { added: added };
 }
 
-function athleAttachDetailFileToIndex(index, resultsId, fileName, objectKey) {
-  var id = String(resultsId);
+function athleAttachDetailFileToIndex(index, competitionKey, fileName, objectKey) {
+  var id = String(competitionKey);
   for (var i = 0; i < (index.competitions || []).length; i++) {
     var entry = index.competitions[i];
-    if (String(entry.resultsId) !== id) continue;
+    var entryKey = entry.key || athleCompetitionKey(entry) || String(entry.resultsId || '');
+    if (entryKey !== id && String(entry.resultsId || '') !== id) continue;
     entry.detailFile = fileName;
     entry.detailObjectKey = objectKey;
     return;

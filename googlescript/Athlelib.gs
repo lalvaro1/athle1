@@ -109,19 +109,113 @@ function athleParseCalendarListHtml(html) {
       tds.push(tdMatch[1]);
     }
     if (tds.length < 6) continue;
-    var ficheMatch = chunk.match(/href="\/competitions\/(\d+)"/i);
+    // Ancien format `/competitions/123` ou fiche actuelle `/competitions/slug/123`.
+    var fichePathMatch = chunk.match(/href="(\/competitions\/[^"]+\/\d+)"/i);
+    if (!fichePathMatch) {
+      fichePathMatch = chunk.match(/href="(\/competitions\/\d+)"/i);
+    }
+    var ficheId = null;
+    var fichePath = null;
+    if (fichePathMatch) {
+      fichePath = fichePathMatch[1];
+      var idMatch = fichePath.match(/\/(\d+)$/);
+      ficheId = idMatch ? idMatch[1] : null;
+    }
     var resultsMatch = chunk.match(/frmbase=resultats[^"]*frmcompetition=(\d+)/i);
+    var placeHtml = tds[2] || '';
+    var departmentMatch = placeHtml.match(/frmdepartement=(\d{2,3})/i);
+    var ligueMatch = placeHtml.match(/frmligue=([^"&]+)/i);
     rows.push({
       dateLabel: athleStripHtml(tds[0]),
       label: athleStripHtml(tds[1]),
       place: athleStripHtml(tds[2]),
       type: athleStripHtml(tds[3]),
       level: athleStripHtml(tds[4]),
-      ficheId: ficheMatch ? ficheMatch[1] : null,
+      department: departmentMatch ? departmentMatch[1] : null,
+      ligue: ligueMatch ? decodeURIComponent(ligueMatch[1]) : null,
+      ficheId: ficheId,
+      fichePath: fichePath,
       resultsId: resultsMatch ? resultsMatch[1] : null,
     });
   }
   return rows;
+}
+
+/**
+ * Lit la fiche athle.fr d’une compétition (métadonnées + lien horaires/PDF).
+ * @param {string} fichePathOrId ex. "/competitions/slug/350462" ou "350462"
+ */
+function athleFetchCompetitionFicheMeta(fichePathOrId) {
+  var path = String(fichePathOrId || '').trim();
+  if (!path) return null;
+  if (/^\d+$/.test(path)) path = '/competitions/' + path;
+  if (path.indexOf('http') !== 0) {
+    if (path.charAt(0) !== '/') path = '/' + path;
+    path = ATHLE_SITE + path;
+  }
+  var html = athleFetchHtml(path);
+  return {
+    ficheUrl: path,
+    scheduleUrl: athleParseScheduleUrlFromFicheHtml(html),
+    notes: athleParseCompetitionFicheNotes(html),
+  };
+}
+
+/** Cherche un lien horaires / programme (souvent un PDF externe). */
+function athleParseScheduleUrlFromFicheHtml(html) {
+  var linkRe = /<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+  var m;
+  var pdfFallback = null;
+  while ((m = linkRe.exec(html)) !== null) {
+    var href = String(m[1] || '').trim();
+    var label = athleStripHtml(m[2] || '').toLowerCase();
+    var hrefLow = href.toLowerCase();
+    if (!href || href.indexOf('javascript:') === 0 || href === '#') continue;
+    var absolute = athleAbsoluteUrl(href);
+    var isPdf = /\.pdf(\?|#|$)/i.test(hrefLow);
+    var looksSchedule =
+      /horaire|programme|start[\s-]?list|timing/i.test(label) ||
+      /horaire|programme|start[\s-]?list|timing/i.test(hrefLow);
+    if (looksSchedule) return absolute;
+    if (isPdf && !pdfFallback) pdfFallback = absolute;
+  }
+  return pdfFallback;
+}
+
+function athleParseCompetitionFicheNotes(html) {
+  // Petite note utile parfois présente sous la fiche (ex. épreuves exclues).
+  var m = html.match(
+    /Retrouvez les START-LISTS[\s\S]{0,40}?ICI\s*\.\s*([\s\S]{0,280}?)<\//i,
+  );
+  if (!m) return null;
+  var note = athleStripHtml(m[1]);
+  return note ? note.replace(/\s+/g, ' ').trim() : null;
+}
+
+function athleAbsoluteUrl(href) {
+  var value = String(href || '').trim();
+  if (!value) return null;
+  if (/^https?:\/\//i.test(value)) return value;
+  if (value.indexOf('//') === 0) return 'https:' + value;
+  if (value.charAt(0) === '/') return ATHLE_SITE + value;
+  return ATHLE_SITE + '/' + value;
+}
+
+/** Clé stable d’index : résultats si dispo, sinon fiche calendrier. */
+function athleCompetitionKey(comp) {
+  if (comp && comp.resultsId) return String(comp.resultsId);
+  if (comp && comp.ficheId) return 'fiche:' + String(comp.ficheId);
+  return '';
+}
+
+/**
+ * Compétition « locale » au club (même département),
+ * utile pour les compétitions futures sans page résultats.
+ */
+function athleIsLocalUpcomingCompetition(comp) {
+  var dept = String((ATHLE_CONFIG && ATHLE_CONFIG.CLUB_DEPARTEMENT) || '').replace(/^0+/, '');
+  var rowDept = String(comp.department || '').replace(/^0+/, '');
+  return Boolean(dept && rowDept && dept === rowDept);
 }
 
 var ATHLE_MONTHS = {
@@ -281,8 +375,9 @@ function athleGetCompetitionsForDate(isoDate, clubName, youthCategories) {
     return athleCompetitionTouchesDate(isoDate, row.dateLabel, refYear);
   });
 
+  // Avec résultats OU fiche calendrier (compétitions futures sans résultats encore).
   var candidates = onDay.filter(function (c) {
-    return c.resultsId;
+    return c.resultsId || c.ficheId;
   });
   var beforeYouth = candidates.length;
   if (youthCategories && youthCategories.length) {
@@ -292,21 +387,70 @@ function athleGetCompetitionsForDate(isoDate, clubName, youthCategories) {
   }
 
   var competitions = [];
+  var upcomingWithoutResults = 0;
   for (var i = 0; i < candidates.length; i++) {
     var comp = candidates[i];
+    if (comp.resultsId) {
+      athleMaybeSleep();
+      var found = athleFindClubInCompetition(comp.resultsId, clubName);
+      if (!found) continue;
+      competitions.push({
+        key: athleCompetitionKey(comp),
+        resultsId: comp.resultsId,
+        ficheId: comp.ficheId,
+        hasResults: true,
+        upcoming: false,
+        calendarDateLabel: comp.dateLabel,
+        calendarLabel: comp.label,
+        place: comp.place,
+        department: comp.department,
+        ligue: comp.ligue,
+        type: comp.type,
+        level: comp.level,
+        resultsTitle: found.resultsTitle,
+        club: found.club,
+      });
+      continue;
+    }
+
+    // Pas encore de résultats : on garde les U14/U16 locales (dept / ligue club).
+    if (!athleIsLocalUpcomingCompetition(comp)) continue;
+    upcomingWithoutResults += 1;
     athleMaybeSleep();
-    var found = athleFindClubInCompetition(comp.resultsId, clubName);
-    if (!found) continue;
+    var ficheMeta = null;
+    try {
+      ficheMeta = athleFetchCompetitionFicheMeta(comp.fichePath || comp.ficheId);
+    } catch (ficheErr) {
+      Logger.log(
+        '  fiche %s indisponible : %s',
+        comp.ficheId || '?',
+        ficheErr.message || ficheErr,
+      );
+    }
     competitions.push({
-      resultsId: comp.resultsId,
+      key: athleCompetitionKey(comp),
+      resultsId: null,
       ficheId: comp.ficheId,
+      hasResults: false,
+      upcoming: true,
       calendarDateLabel: comp.dateLabel,
       calendarLabel: comp.label,
       place: comp.place,
+      department: comp.department,
+      ligue: comp.ligue,
       type: comp.type,
       level: comp.level,
-      resultsTitle: found.resultsTitle,
-      club: found.club,
+      resultsTitle: null,
+      club: {
+        id: String((ATHLE_CONFIG && ATHLE_CONFIG.CLUB_ID) || ''),
+        name: String((ATHLE_CONFIG && ATHLE_CONFIG.CLUB_NAME) || clubName || ''),
+      },
+      ficheUrl:
+        (ficheMeta && ficheMeta.ficheUrl) ||
+        (comp.fichePath ? ATHLE_SITE + comp.fichePath : null) ||
+        (comp.ficheId ? ATHLE_SITE + '/competitions/' + comp.ficheId : null),
+      scheduleUrl: (ficheMeta && ficheMeta.scheduleUrl) || null,
+      notes: (ficheMeta && ficheMeta.notes) || null,
     });
   }
 
@@ -318,6 +462,7 @@ function athleGetCompetitionsForDate(isoDate, clubName, youthCategories) {
     calendarCompetitions: onDay.length,
     withResultsBeforeYouthFilter: beforeYouth,
     checkedWithResults: candidates.length,
+    upcomingWithoutResults: upcomingWithoutResults,
     count: competitions.length,
     competitions: competitions,
   };
