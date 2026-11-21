@@ -490,6 +490,24 @@ function runAthleSyncForDate(isoDate, sharedIndex) {
   for (var i = 0; i < listPayload.competitions.length; i++) {
     var comp = listPayload.competitions[i];
     var key = comp.key || athleCompetitionKey(comp);
+    // Réinjecte liveId / scheduleUrl déjà connus (la liste « résultats » ne les porte plus).
+    for (var ix = 0; ix < (index.competitions || []).length; ix++) {
+      var prev = index.competitions[ix];
+      if (!prev) continue;
+      var prevKey = prev.key || athleCompetitionKey(prev);
+      if (
+        prevKey !== key &&
+        String(prev.ficheId || '') !== String(comp.ficheId || '') &&
+        String(prev.resultsId || '') !== String(comp.resultsId || '')
+      ) {
+        continue;
+      }
+      if (!comp.liveId && prev.liveId) comp.liveId = prev.liveId;
+      if (!comp.liveUrl && prev.liveUrl) comp.liveUrl = prev.liveUrl;
+      if (!comp.scheduleUrl && prev.scheduleUrl) comp.scheduleUrl = prev.scheduleUrl;
+      if (!comp.ficheUrl && prev.ficheUrl) comp.ficheUrl = prev.ficheUrl;
+      break;
+    }
     var detailSourceId = null;
     var detail = null;
     try {
@@ -497,6 +515,18 @@ function runAthleSyncForDate(isoDate, sharedIndex) {
         athleMaybeSleep();
         detail = athleGetClubEpreuvesInCompetition(comp.resultsId, clubName, comp.club);
         detailSourceId = comp.resultsId;
+        // Résultats publiés mais tableau club encore vide / format inattendu :
+        // retomber sur les start-lists Live plutôt qu’écraser un planning utile.
+        if ((!detail || !detail.count) && comp.liveId) {
+          Logger.log(
+            '  · résultats %s vides — repli Live %s',
+            comp.resultsId,
+            comp.liveId,
+          );
+          athleMaybeSleep();
+          detail = athleGetClubEpreuvesFromLive(comp.liveId, clubName, comp.club);
+          detailSourceId = 'live-' + comp.liveId;
+        }
       } else if (comp.liveId) {
         // Start-lists Live disponibles avant les résultats officiels.
         Logger.log(
@@ -509,10 +539,6 @@ function runAthleSyncForDate(isoDate, sharedIndex) {
         athleMaybeSleep();
         detail = athleGetClubEpreuvesFromLive(comp.liveId, clubName, comp.club);
         detailSourceId = 'live-' + comp.liveId;
-        if (!detail || !detail.count) {
-          Logger.log('  · live %s : aucun athlète club dans les start-lists', comp.liveId);
-          continue;
-        }
       } else {
         Logger.log(
           '  · à venir %s — %s (fiche %s%s)',
@@ -520,6 +546,14 @@ function runAthleSyncForDate(isoDate, sharedIndex) {
           comp.calendarLabel || '?',
           comp.ficheId || '?',
           comp.scheduleUrl ? ', horaires OK' : ', sans horaires',
+        );
+        continue;
+      }
+
+      if (!detail || !detail.count) {
+        Logger.log(
+          '  · %s : aucun athlète club (pas d’écriture R2)',
+          key,
         );
         continue;
       }
@@ -637,7 +671,11 @@ function athleMergeCompetitionsIntoIndex(index, competitions, isoDate) {
       if (!current.dates) current.dates = current.date ? [current.date] : [];
       if (current.dates.indexOf(isoDate) === -1) current.dates.push(isoDate);
       if (!current.key) current.key = id;
-      if (!current.resultsId && comp.resultsId) current.resultsId = comp.resultsId;
+      if (comp.resultsId && String(comp.resultsId).indexOf('fiche:') !== 0) {
+        current.resultsId = comp.resultsId;
+      } else if (!current.resultsId && comp.resultsId) {
+        current.resultsId = comp.resultsId;
+      }
       if (!current.ficheId && comp.ficheId) current.ficheId = comp.ficheId;
       if (comp.hasResults) {
         current.hasResults = true;

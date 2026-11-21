@@ -747,12 +747,14 @@ function athleParseEpreuveOptions(html) {
 
 function athleParseClubParticipantRows(html) {
   var rows = [];
-  var trRe = /<tr class="">([\s\S]*?)<\/tr>/gi;
+  // Lignes club : class="" ou class="bg-background-light-grey" (zébrage).
+  // Les résultats récents n’ont parfois plus de lien /athletes/{id}/.
+  var trRe =
+    /<tr class="(|bg-background-light-grey)">([\s\S]*?)<\/tr>/gi;
   var trMatch;
   while ((trMatch = trRe.exec(html)) !== null) {
-    var chunk = trMatch[1];
-    var athleteMatch = chunk.match(/\/athletes\/(\d+)\//);
-    if (!athleteMatch) continue;
+    var chunk = trMatch[2];
+    var athleteMatch = chunk.match(/\/athletes\/(\d+)/i);
     var tds = [];
     var tdRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
     var tdMatch;
@@ -760,9 +762,11 @@ function athleParseClubParticipantRows(html) {
       tds.push(tdMatch[1]);
     }
     if (tds.length < 8) continue;
+    var athleteName = athleStripHtml(tds[0]);
+    if (!athleteName) continue;
     rows.push({
-      athleteId: athleteMatch[1],
-      athleteName: athleStripHtml(tds[0]),
+      athleteId: athleteMatch ? athleteMatch[1] : null,
+      athleteName: athleteName,
       epreuveName: athleStripHtml(tds[1]),
       performance: athleStripHtml(tds[2]) || null,
       series: athleStripHtml(tds[3]) || null,
