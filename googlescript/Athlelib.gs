@@ -695,7 +695,16 @@ function athleGetCompetitionsForDate(isoDate, clubName, youthCategories) {
   var beforeYouth = candidates.length;
   if (youthCategories && youthCategories.length) {
     candidates = candidates.filter(function (c) {
-      return athleIsYouthCompetition(c, youthCategories);
+      if (athleIsYouthCompetition(c, youthCategories)) return true;
+      // À venir locale : le libellé omet souvent U14/U16 (ex. « Épreuves Combinées »).
+      // On garde les meetings / championnats salle du département club.
+      if (!c.resultsId && athleIsLocalUpcomingCompetition(c)) {
+        var typ = athleRemoveAccents(String(c.type || '')).toLowerCase();
+        var hay = athleCompetitionHaystack(c);
+        if (/\bsalle\b/.test(typ)) return true;
+        if (/epreuves?\s+combinees|\btriathlon\b|equip[\s'-]?athle/.test(hay)) return true;
+      }
+      return false;
     });
   }
 
